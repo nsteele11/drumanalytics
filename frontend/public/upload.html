@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Upload</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+    <script src="/script.js"></script>
+</head>
+<body>
+    <!-- Navigation bar -->
+    <nav>
+      <a href="index.html" class="active">Instagram Insights</a>
+      <a href="upload.html">Video Upload</a>
+      <a href="audio.html">Audio Analytics</a>
+  </nav>
+  
+    <main>
+        <h1>Video Upload</h1>
+
+        <div class="section-placeholder">
+            <form id="uploadForm">
+                <label for="videoFile">Select a video file:</label><br>
+                <input type="file" id="videoFile" name="videoFile" accept="video/*" required><br><br>
+                <button type="submit">Upload Video</button>
+            </form>
+
+            <div id="uploadStatus"></div>
+        </div>
+    </main>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const statusDiv = document.getElementById('uploadStatus');
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+        
+            const fileInput = document.getElementById('videoFile');
+            const file = fileInput.files[0];
+        
+            if (!file) {
+                alert("Please select a video file");
+                return;
+            }
+        
+            statusDiv.innerHTML = `<p>Uploading <strong>${file.name}</strong>...</p>`;
+        
+            const formData = new FormData();
+            formData.append('video', file);
+        
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+        
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.status}`);
+                }
+        
+                const result = await response.json();
+                statusDiv.innerHTML += `<p>Upload complete!</p>`;
+                console.log("Upload response:", result);
+        
+            } catch (err) {
+                console.error(err);
+                statusDiv.innerHTML += `<p style="color:red">Upload failed</p>`;
+            }
+        });
+        </script>
+</body>
+</html>

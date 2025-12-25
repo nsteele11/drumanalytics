@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build / output folders
+dist/
+uploads/
+results/
+
+# PM2 dump files (if you use PM2 ecosystem)
+ecosystem.config.js
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,68 @@
+
+body {
+    font-family: 'Roboto', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f9f9f9;
+}
+
+/* Navigation Bar Styles */
+nav {
+    background-color: #333;               /* Dark background */
+    padding: 15px 30px;                   /* Space inside the nav */
+    display: flex;                         /* Horizontal layout */
+    gap: 20px;                             /* Space between links */
+    align-items: center;                   /* Vertical alignment */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* Soft shadow for depth */
+}
+
+nav a {
+    color: white;                          /* Link color */
+    text-decoration: none;                 /* Remove underline */
+    font-weight: 500;                       /* Medium weight text */
+    padding: 8px 12px;                      /* Padding inside link */
+    border-radius: 5px;                     /* Rounded corners */
+    transition: background-color 0.2s, color 0.2s; /* Smooth hover effect */
+}
+
+nav a:hover {
+    background-color: #ffcc00;             /* Highlight on hover */
+    color: #333;                           /* Dark text on hover */
+}
+
+nav a.active {
+    background-color: #ffcc00;             /* Highlight current page */
+    color: #333;
+}
+
+.container, main {
+    padding: 40px 20px;
+}
+
+h1, h2 {
+    color: #333;
+}
+
+button {
+    padding: 10px 20px;
+    background-color: #333;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+button:hover {
+    background-color: #555;
+}
+
+input[type="file"] {
+    margin: 10px 0;
+}
+
+.section-placeholder {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
