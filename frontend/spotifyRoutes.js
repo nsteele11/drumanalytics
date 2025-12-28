@@ -90,4 +90,77 @@ router.get("/search/tracks", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/spotify/track/:trackId
+ * Returns full track metadata including album image and artist followers
+ */
+router.get("/track/:trackId", async (req, res) => {
+  const trackId = req.params.trackId;
+
+  if (!trackId) {
+    return res.status(400).json({ error: "trackId is required" });
+  }
+
+  try {
+    const token = await getSpotifyToken();
+
+    // Fetch track details from Spotify API
+    const trackRes = await fetch(
+      `https://api.spotify.com/v1/tracks/${trackId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!trackRes.ok) {
+      throw new Error(`Spotify API error: ${trackRes.status}`);
+    }
+
+    const trackData = await trackRes.json();
+
+    // Get artist details to fetch followers
+    const artistId = trackData.artists[0].id;
+    const artistRes = await fetch(
+      `https://api.spotify.com/v1/artists/${artistId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!artistRes.ok) {
+      throw new Error(`Spotify API error: ${artistRes.status}`);
+    }
+
+    const artistData = await artistRes.json();
+
+    // Format response to match what frontend expects
+    const response = {
+      artist: {
+        id: artistData.id,
+        name: artistData.name,
+        genres: artistData.genres || [],
+        followers: artistData.followers.total
+      },
+      track: {
+        id: trackData.id,
+        name: trackData.name,
+        album: trackData.album.name,
+        release_date: trackData.album.release_date,
+        popularity: trackData.popularity,
+        duration_ms: trackData.duration_ms,
+        album_image_url: trackData.album.images[0]?.url || null
+      }
+    };
+
+    res.json(response);
+  } catch (err) {
+    console.error("Spotify track metadata error:", err);
+    res.status(500).json({ error: "Failed to fetch track metadata from Spotify" });
+  }
+});
+
 export default router;
