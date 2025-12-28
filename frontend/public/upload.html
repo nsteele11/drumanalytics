@@ -8,158 +8,145 @@
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <!-- Navigation bar -->
-    <nav>
-        <a href="index.html" class="active">Instagram Insights</a>
-        <a href="upload.html">Video Upload</a>
-        <a href="audio.html">Audio Analytics</a>
-    </nav>
-  
-    <main>
-        <h1>Video Upload</h1>
 
-        <div class="section-placeholder">
-            <form id="uploadForm">
-                <!-- Artist Selection -->
-                <label for="artist-search">Artist:</label><br>
-                <input type="text" id="artist-search" placeholder="Type artist name" autocomplete="off">
-                <ul id="artist-results"></ul><br>
+<nav>
+    <a href="index.html">Instagram Insights</a>
+    <a href="upload.html" class="active">Video Upload</a>
+    <a href="audio.html">Audio Analytics</a>
+</nav>
 
-                <!-- Track Selection -->
-                <label for="track-search">Track:</label><br>
-                <input type="text" id="track-search" placeholder="Select track" autocomplete="off" disabled>
-                <ul id="track-results"></ul><br>
+<main>
+    <h1>Video Upload</h1>
 
-                <!-- Video Upload -->
-                <label for="videoFile">Select a video file:</label><br>
-                <input type="file" id="videoFile" name="videoFile" accept="video/*" required><br><br>
+    <div class="section-placeholder">
+        <form id="uploadForm">
 
-                <button type="submit">Upload Video</button>
-            </form>
+            <!-- ARTIST SEARCH -->
+            <label>Artist</label><br>
+            <input type="text" id="artist-search" placeholder="Type artist name" autocomplete="off">
+            <ul id="artist-results"></ul><br>
 
-            <div id="uploadStatus"></div>
-        </div>
-    </main>
+            <!-- TRACK SEARCH -->
+            <label>Track</label><br>
+            <input type="text" id="track-search" placeholder="Select track" autocomplete="off" disabled>
+            <ul id="track-results"></ul><br>
 
-    <script>
-        let selectedArtistId = null;
-        let selectedTrackId = null;
+            <!-- METADATA PREVIEW -->
+            <div id="metadataPreview" style="display:none; margin:15px 0; padding:10px; border:1px solid #ccc;">
+                <h3>Spotify Metadata</h3>
+                <p id="artistMeta"></p>
+                <p id="trackMeta"></p>
+            </div>
 
-        const form = document.getElementById('uploadForm');
-        const statusDiv = document.getElementById('uploadStatus');
+            <!-- VIDEO -->
+            <label>Select a video file</label><br>
+            <input type="file" id="videoFile" accept="video/*" required><br><br>
 
-        // ---------------------
-        // ARTIST SEARCH
-        // ---------------------
-        document.getElementById('artist-search').addEventListener('input', async (e) => {
-            const query = e.target.value;
-            const resultsList = document.getElementById('artist-results');
-            resultsList.innerHTML = '';
+            <button type="submit">Upload Video</button>
+        </form>
 
-            if (!query) return;
+        <div id="uploadStatus"></div>
+    </div>
+</main>
 
-            try {
-                const res = await fetch(`/api/spotify/search/artists?q=${encodeURIComponent(query)}`);
-                const artists = await res.json();
+<script>
+let selectedArtistId = null;
+let selectedTrackId = null;
+let spotifyMetadata = null;
 
-                artists.forEach(artist => {
-                    const li = document.createElement('li');
-                    li.textContent = `${artist.name} (${artist.followers} followers)`;
-                    li.style.cursor = 'pointer';
-                    li.addEventListener('click', () => {
-                        selectedArtistId = artist.spotify_artist_id;
-                        document.getElementById('artist-search').value = artist.name;
-                        resultsList.innerHTML = '';
+const artistResults = document.getElementById('artist-results');
+const trackResults = document.getElementById('track-results');
+const statusDiv = document.getElementById('uploadStatus');
 
-                        // enable track search now
-                        const trackInput = document.getElementById('track-search');
-                        trackInput.disabled = false;
-                        trackInput.value = '';
-                        selectedTrackId = null;
-                        document.getElementById('track-results').innerHTML = '';
-                    });
-                    resultsList.appendChild(li);
-                });
-            } catch (err) {
-                console.error("Artist search failed:", err);
-            }
-        });
+/* -----------------------------
+   ARTIST SEARCH
+--------------------------------*/
+document.getElementById('artist-search').addEventListener('input', async (e) => {
+    const query = e.target.value;
+    artistResults.innerHTML = '';
+    if (!query) return;
 
-        // ---------------------
-        // TRACK SEARCH
-        // ---------------------
-        document.getElementById('track-search').addEventListener('input', async (e) => {
-            const query = e.target.value;
-            const resultsList = document.getElementById('track-results');
-            resultsList.innerHTML = '';
+    const res = await fetch(`/api/spotify/search/artists?q=${encodeURIComponent(query)}`);
+    const artists = await res.json();
 
-            if (!query || !selectedArtistId) return;
+    artists.forEach(a => {
+        const li = document.createElement('li');
+        li.textContent = `${a.name} (${a.followers} followers)`;
+        li.onclick = () => {
+            selectedArtistId = a.spotify_artist_id;
+            document.getElementById('artist-search').value = a.name;
+            artistResults.innerHTML = '';
+            document.getElementById('track-search').disabled = false;
+        };
+        artistResults.appendChild(li);
+    });
+});
 
-            try {
-                const res = await fetch(`/api/spotify/search/tracks?artistId=${selectedArtistId}&q=${encodeURIComponent(query)}`);
-                const tracks = await res.json();
+/* -----------------------------
+   TRACK SEARCH
+--------------------------------*/
+document.getElementById('track-search').addEventListener('input', async (e) => {
+    const query = e.target.value;
+    trackResults.innerHTML = '';
+    if (!query || !selectedArtistId) return;
 
-                tracks.forEach(track => {
-                    const li = document.createElement('li');
-                    li.textContent = track.name;
-                    li.style.cursor = 'pointer';
-                    li.addEventListener('click', () => {
-                        selectedTrackId = track.id;
-                        document.getElementById('track-search').value = track.name;
-                        resultsList.innerHTML = '';
-                    });
-                    resultsList.appendChild(li);
-                });
-            } catch (err) {
-                console.error("Track search failed:", err);
-            }
-        });
+    const res = await fetch(`/api/spotify/search/tracks?artistId=${selectedArtistId}&q=${encodeURIComponent(query)}`);
+    const tracks = await res.json();
 
-        // ---------------------
-        // VIDEO UPLOAD
-        // ---------------------
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
+    tracks.forEach(t => {
+        const li = document.createElement('li');
+        li.textContent = t.name;
+        li.onclick = async () => {
+            selectedTrackId = t.id;
+            document.getElementById('track-search').value = t.name;
+            trackResults.innerHTML = '';
 
-            const fileInput = document.getElementById('videoFile');
-            const file = fileInput.files[0];
+            // FETCH FULL METADATA
+            const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
+            spotifyMetadata = await metaRes.json();
 
-            if (!file) {
-                alert("Please select a video file");
-                return;
-            }
+            document.getElementById('metadataPreview').style.display = 'block';
+            document.getElementById('artistMeta').innerHTML =
+                `<strong>Artist:</strong> ${spotifyMetadata.artist.name}<br>
+                 <strong>Genres:</strong> ${spotifyMetadata.artist.genres.join(', ')}`;
 
-            if (!selectedArtistId || !selectedTrackId) {
-                alert("Please select an artist and track");
-                return;
-            }
+            document.getElementById('trackMeta').innerHTML =
+                `<strong>Track:</strong> ${spotifyMetadata.track.name}<br>
+                 <strong>Album:</strong> ${spotifyMetadata.track.album}<br>
+                 <strong>Release:</strong> ${spotifyMetadata.track.release_date}<br>
+                 <strong>Popularity:</strong> ${spotifyMetadata.track.popularity}`;
+        };
+        trackResults.appendChild(li);
+    });
+});
 
-            statusDiv.innerHTML = `<p>Uploading <strong>${file.name}</strong>...</p>`;
+/* -----------------------------
+   UPLOAD
+--------------------------------*/
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-            const formData = new FormData();
-            formData.append('video', file);
-            formData.append('artistId', selectedArtistId);
-            formData.append('trackId', selectedTrackId);
+    if (!spotifyMetadata) {
+        alert("Please select artist and track");
+        return;
+    }
 
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
+    const file = document.getElementById('videoFile').files[0];
+    if (!file) return alert("Select a video");
 
-                if (!response.ok) {
-                    throw new Error(`Upload failed: ${response.status}`);
-                }
+    const fd = new FormData();
+    fd.append('video', file);
+    fd.append('spotifyMetadata', JSON.stringify(spotifyMetadata));
 
-                const result = await response.json();
-                statusDiv.innerHTML += `<p>Upload complete!</p>`;
-                console.log("Upload response:", result);
+    statusDiv.innerHTML = "Uploading...";
 
-            } catch (err) {
-                console.error(err);
-                statusDiv.innerHTML += `<p style="color:red">Upload failed</p>`;
-            }
-        });
-    </script>
+    const res = await fetch('/upload', { method:'POST', body: fd });
+    const data = await res.json();
+
+    statusDiv.innerHTML = "Upload complete!";
+    console.log(data);
+});
+</script>
+
 </body>
 </html>
