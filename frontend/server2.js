@@ -710,7 +710,17 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
   const trackName = currentVideo.trackName || currentVideo.spotify?.track?.name || '';
   const genres = currentVideo.spotify?.artist?.genres || [];
 
-  // Extract and normalize hashtags from historical data
+  // Build a set of all other artist names to exclude from suggestions
+  const otherArtistNames = new Set();
+  allVideos.forEach(video => {
+    if (video.s3Key === currentVideo.s3Key) return;
+    const otherArtist = video.artistName || video.spotify?.artist?.name || '';
+    if (otherArtist && otherArtist.toLowerCase() !== artistName.toLowerCase()) {
+      otherArtistNames.add(normalizeForHashtag(otherArtist).toLowerCase());
+    }
+  });
+
+  // Extract and normalize hashtags from historical data for validation/scoring only
   const hashtagPerformance = new Map(); // hashtag -> { igViews, igLikes, tiktokViews, tiktokLikes, count }
 
   allVideos.forEach(video => {
@@ -723,6 +733,9 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
       const igEngagement = calculateEngagement(video.igViews, video.igLikes);
       
       igTags.forEach(tag => {
+        // Skip if this tag matches another artist name
+        if (otherArtistNames.has(tag)) return;
+        
         if (!hashtagPerformance.has(tag)) {
           hashtagPerformance.set(tag, { igViews: 0, igLikes: 0, tiktokViews: 0, tiktokLikes: 0, count: 0, igEngagement: 0, tiktokEngagement: 0 });
         }
@@ -740,6 +753,9 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
       const tiktokEngagement = calculateEngagement(video.tiktokViews, video.tiktokLikes);
       
       tiktokTags.forEach(tag => {
+        // Skip if this tag matches another artist name
+        if (otherArtistNames.has(tag)) return;
+        
         if (!hashtagPerformance.has(tag)) {
           hashtagPerformance.set(tag, { igViews: 0, igLikes: 0, tiktokViews: 0, tiktokLikes: 0, count: 0, igEngagement: 0, tiktokEngagement: 0 });
         }
@@ -760,13 +776,15 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
     }
   });
 
-  // Generate base hashtags
+  // Generate base hashtags (only from current video's metadata)
   const baseHashtags = generateBaseHashtags(artistName, trackName, genres);
 
   // Generate Instagram recommendations
   const instagramSuggestions = generatePlatformSuggestions(
     baseHashtags,
     hashtagPerformance,
+    otherArtistNames,
+    genres,
     'instagram',
     15
   );
@@ -775,6 +793,8 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
   const tiktokSuggestions = generatePlatformSuggestions(
     baseHashtags,
     hashtagPerformance,
+    otherArtistNames,
+    genres,
     'tiktok',
     15
   );
@@ -842,9 +862,15 @@ function normalizeForHashtag(text) {
     .substring(0, 30); // Limit length
 }
 
-function generatePlatformSuggestions(baseHashtags, hashtagPerformance, platform, maxCount) {
+function generatePlatformSuggestions(baseHashtags, hashtagPerformance, otherArtistNames, spotifyGenres, platform, maxCount) {
   const suggestions = [];
   const usedTags = new Set();
+
+  // Create a set of normalized Spotify genre hashtags for validation
+  const spotifyGenreTags = new Set();
+  spotifyGenres.forEach(genre => {
+    spotifyGenreTags.add(normalizeForHashtag(genre).toLowerCase());
+  });
 
   // Always include band name first
   const bandTag = baseHashtags.find(h => h.source === 'band');
@@ -856,7 +882,7 @@ function generatePlatformSuggestions(baseHashtags, hashtagPerformance, platform,
   // Score all potential hashtags
   const scoredHashtags = [];
 
-  // Score base hashtags
+  // Score base hashtags (band, track, genres from Spotify, general tags)
   baseHashtags.forEach(base => {
     if (usedTags.has(base.tag.toLowerCase())) return;
     
@@ -864,7 +890,7 @@ function generatePlatformSuggestions(baseHashtags, hashtagPerformance, platform,
     let score = base.priority;
 
     if (perf) {
-      // Boost score based on historical performance
+      // Boost score based on historical performance (validation)
       const engagement = platform === 'instagram' ? perf.igEngagement : perf.tiktokEngagement;
       const views = platform === 'instagram' ? perf.igViews : perf.tiktokViews;
       
@@ -877,15 +903,33 @@ function generatePlatformSuggestions(baseHashtags, hashtagPerformance, platform,
     scoredHashtags.push({ tag: base.tag, score, source: base.source });
   });
 
-  // Score historical hashtags that aren't in base list
+  // Only add historical hashtags that are:
+  // 1. General music/drumming tags (not genre-specific or artist-specific)
+  // 2. Not matching other artist names
+  // 3. Not already in base hashtags
+  // Historical data is used for validation/scoring, not for adding new genres or artist names
+  const generalMusicTags = [
+    'drumming', 'drummer', 'drums', 'music', 'musician',
+    'drumcover', 'drumvideo', 'drumlife', 'drummerlife',
+    'musicproduction', 'livemusic', 'rockmusic', 'musiclover',
+    'drumbeat', 'drummingvideo', 'drumtutorial',
+    'musicvideo', 'cover', 'coversong', 'drumcover'
+  ];
+
   hashtagPerformance.forEach((perf, tag) => {
     if (usedTags.has(tag)) return;
+    
+    // Exclude if it matches another artist name
+    if (otherArtistNames.has(tag)) return;
+    
+    // Only include general music tags, not genre-specific or artist-specific tags
+    if (!generalMusicTags.includes(tag)) return;
     
     const engagement = platform === 'instagram' ? perf.igEngagement : perf.tiktokEngagement;
     const views = platform === 'instagram' ? perf.igViews : perf.tiktokViews;
     
     if (engagement > 0 || views > 0) {
-      let score = 3; // Base score for historical tags
+      let score = 3; // Base score for historical general tags
       score += Math.min(engagement / 10, 3);
       score += Math.min(Math.log10(views + 1) / 2, 2);
       score += Math.min(perf.count / 5, 1);
