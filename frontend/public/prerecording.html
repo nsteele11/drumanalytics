@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pre Recording</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<nav>
+    <a href="index.html">Instagram Insights</a>
+    <a href="prerecording.html" class="active">Pre Recording</a>
+    <a href="upload.html">Video Upload</a>
+    <a href="videos.html">Videos</a>
+    <a href="audio.html">Audio Analytics</a>
+</nav>
+
+<main>
+    <h1>Pre Recording</h1>
+    <p style="color: #666; margin-bottom: 20px;">Search for artists and tracks to compare metadata and predict performance potential</p>
+
+    <div class="section-placeholder">
+        <!-- Search Section -->
+        <div class="search-section">
+            <h2>Search Track</h2>
+            
+            <!-- Artist Search -->
+            <div class="search-field">
+                <label>Artist</label><br>
+                <input type="text" id="artist-search" placeholder="Type artist name" autocomplete="off">
+                <ul id="artist-results" class="search-results"></ul>
+            </div>
+
+            <!-- Track Search -->
+            <div class="search-field">
+                <label>Track</label><br>
+                <input type="text" id="track-search" placeholder="Select track" autocomplete="off" disabled>
+                <ul id="track-results" class="search-results"></ul>
+            </div>
+
+            <button id="addToComparison" class="add-button" disabled>Add to Comparison</button>
+        </div>
+
+        <!-- Comparison Table -->
+        <div id="comparisonSection" class="comparison-section" style="display: none;">
+            <h2>Track Comparison</h2>
+            <div class="table-container">
+                <table id="comparisonTable" class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Artist</th>
+                            <th>Track</th>
+                            <th>Album</th>
+                            <th>Genres</th>
+                            <th>Artist Followers</th>
+                            <th>Track Popularity</th>
+                            <th>Release Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparisonTableBody">
+                        <!-- Rows will be added here -->
+                    </tbody>
+                </table>
+            </div>
+            <button id="clearComparison" class="clear-button">Clear All</button>
+        </div>
+    </div>
+</main>
+
+<script>
+let selectedArtistId = null;
+let selectedTrackId = null;
+let currentTrackMetadata = null;
+let comparisonTracks = [];
+
+const artistResults = document.getElementById('artist-results');
+const trackResults = document.getElementById('track-results');
+const addButton = document.getElementById('addToComparison');
+const comparisonSection = document.getElementById('comparisonSection');
+const comparisonTableBody = document.getElementById('comparisonTableBody');
+const clearButton = document.getElementById('clearComparison');
+
+/* -----------------------------
+   ARTIST SEARCH
+--------------------------------*/
+document.getElementById('artist-search').addEventListener('input', async (e) => {
+    const query = e.target.value;
+    artistResults.innerHTML = '';
+    if (!query) {
+        selectedArtistId = null;
+        document.getElementById('track-search').disabled = true;
+        document.getElementById('track-search').value = '';
+        addButton.disabled = true;
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/spotify/search/artists?q=${encodeURIComponent(query)}`);
+        const artists = await res.json();
+
+        artists.forEach(a => {
+            const li = document.createElement('li');
+            li.textContent = `${a.name} (${a.followers.toLocaleString()} followers)`;
+            li.onclick = () => {
+                selectedArtistId = a.spotify_artist_id;
+                document.getElementById('artist-search').value = a.name;
+                artistResults.innerHTML = '';
+                document.getElementById('track-search').disabled = false;
+            };
+            artistResults.appendChild(li);
+        });
+    } catch (err) {
+        console.error('Error searching artists:', err);
+    }
+});
+
+/* -----------------------------
+   TRACK SEARCH
+--------------------------------*/
+document.getElementById('track-search').addEventListener('input', async (e) => {
+    const query = e.target.value;
+    trackResults.innerHTML = '';
+    if (!query || !selectedArtistId) return;
+
+    try {
+        const res = await fetch(`/api/spotify/search/tracks?artistId=${selectedArtistId}&q=${encodeURIComponent(query)}`);
+        const tracks = await res.json();
+
+        tracks.forEach(t => {
+            const li = document.createElement('li');
+            li.textContent = t.name;
+            li.onclick = async () => {
+                selectedTrackId = t.id;
+                document.getElementById('track-search').value = t.name;
+                trackResults.innerHTML = '';
+
+                // Fetch full metadata
+                try {
+                    const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
+                    currentTrackMetadata = await metaRes.json();
+                    addButton.disabled = false;
+                } catch (err) {
+                    console.error('Error fetching track metadata:', err);
+                    alert('Failed to load track metadata');
+                }
+            };
+            trackResults.appendChild(li);
+        });
+    } catch (err) {
+        console.error('Error searching tracks:', err);
+    }
+});
+
+/* -----------------------------
+   ADD TO COMPARISON
+--------------------------------*/
+addButton.addEventListener('click', () => {
+    if (!currentTrackMetadata) return;
+
+    // Check if track is already in comparison
+    const exists = comparisonTracks.some(t => t.track.id === currentTrackMetadata.track.id);
+    if (exists) {
+        alert('This track is already in the comparison table');
+        return;
+    }
+
+    // Add to comparison array
+    comparisonTracks.push(currentTrackMetadata);
+
+    // Update table
+    updateComparisonTable();
+
+    // Show comparison section
+    comparisonSection.style.display = 'block';
+
+    // Reset search
+    document.getElementById('artist-search').value = '';
+    document.getElementById('track-search').value = '';
+    document.getElementById('track-search').disabled = true;
+    selectedArtistId = null;
+    selectedTrackId = null;
+    currentTrackMetadata = null;
+    addButton.disabled = true;
+});
+
+/* -----------------------------
+   UPDATE COMPARISON TABLE
+--------------------------------*/
+function updateComparisonTable() {
+    comparisonTableBody.innerHTML = '';
+
+    comparisonTracks.forEach((metadata, index) => {
+        const row = document.createElement('tr');
+        
+        const genres = metadata.artist.genres && metadata.artist.genres.length > 0 
+            ? metadata.artist.genres.join(', ') 
+            : 'N/A';
+        
+        const followers = metadata.artist.followers 
+            ? metadata.artist.followers.toLocaleString() 
+            : 'N/A';
+        
+        const popularity = metadata.track.popularity !== null && metadata.track.popularity !== undefined
+            ? metadata.track.popularity
+            : 'N/A';
+
+        row.innerHTML = `
+            <td>${escapeHtml(metadata.artist.name)}</td>
+            <td>${escapeHtml(metadata.track.name)}</td>
+            <td>${escapeHtml(metadata.track.album || 'N/A')}</td>
+            <td>${escapeHtml(genres)}</td>
+            <td>${followers}</td>
+            <td>${popularity}</td>
+            <td>${escapeHtml(metadata.track.release_date || 'N/A')}</td>
+            <td>
+                <button class="remove-button" data-index="${index}">Remove</button>
+            </td>
+        `;
+
+        // Add remove button handler
+        const removeBtn = row.querySelector('.remove-button');
+        removeBtn.addEventListener('click', () => {
+            comparisonTracks.splice(index, 1);
+            updateComparisonTable();
+            if (comparisonTracks.length === 0) {
+                comparisonSection.style.display = 'none';
+            }
+        });
+
+        comparisonTableBody.appendChild(row);
+    });
+}
+
+/* -----------------------------
+   CLEAR COMPARISON
+--------------------------------*/
+clearButton.addEventListener('click', () => {
+    if (confirm('Clear all tracks from comparison?')) {
+        comparisonTracks = [];
+        comparisonSection.style.display = 'none';
+    }
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
+
