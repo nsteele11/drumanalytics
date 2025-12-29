@@ -158,13 +158,30 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     console.log("Uploaded video to S3:", s3Key);
 
     // ----------------------
-    // Download video for analysis
+    // Analyze video directly from local file (more efficient)
     // ----------------------
-    const tempPath = path.join(uploadDir, `temp-${s3Key}`);
-    await downloadFromS3(s3Key, tempPath);
-
-    const analysis = await analyzeVideo(tempPath);
-    console.log("Analysis result:", analysis);
+    console.log("Starting video analysis...");
+    let analysis;
+    try {
+      analysis = await analyzeVideo(file.path);
+      console.log("Analysis result:", analysis);
+    } catch (analysisError) {
+      console.error("Video analysis error:", analysisError);
+      // Clean up uploaded file from S3 if analysis fails
+      try {
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: `failed-${s3Key}`,
+            Body: JSON.stringify({ error: "Analysis failed", message: analysisError.message }),
+            ContentType: "application/json",
+          })
+        );
+      } catch (cleanupError) {
+        console.error("Cleanup error:", cleanupError);
+      }
+      throw new Error(`Video analysis failed: ${analysisError.message}`);
+    }
 
     // ----------------------
     // Save analysis JSON locally
@@ -203,10 +220,13 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     console.log("Analysis + metadata saved to S3:", analysisKey);
 
     // ----------------------
-    // Cleanup
+    // Cleanup local file
     // ----------------------
-    fs.unlinkSync(tempPath);
-    fs.unlinkSync(file.path);
+    try {
+      fs.unlinkSync(file.path);
+    } catch (cleanupError) {
+      console.warn("Failed to delete local file:", cleanupError);
+    }
 
     // ----------------------
     // Response
@@ -218,7 +238,15 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     });
   } catch (err) {
     console.error("Upload or analysis error:", err);
-    res.status(500).send("Upload or analysis failed");
+    // Clean up uploaded file if it exists
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.warn("Failed to cleanup file:", cleanupError);
+      }
+    }
+    res.status(500).json({ error: "Upload or analysis failed", message: err.message });
   }
 });
 

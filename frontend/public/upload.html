@@ -298,25 +298,50 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
 document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    if (!spotifyMetadata) {
+    if (!spotifyMetadata || !selectedArtistId || !selectedTrackId) {
         alert("Please select artist and track");
         return;
     }
 
     const file = document.getElementById('videoFile').files[0];
-    if (!file) return alert("Select a video");
+    if (!file) {
+        alert("Select a video");
+        return;
+    }
 
     const fd = new FormData();
     fd.append('video', file);
+    fd.append('artistId', selectedArtistId);
+    fd.append('trackId', selectedTrackId);
     fd.append('spotifyMetadata', JSON.stringify(spotifyMetadata));
 
     statusDiv.innerHTML = "Uploading...";
 
-    const res = await fetch('/upload', { method:'POST', body: fd });
-    const data = await res.json();
+    try {
+        const res = await fetch('/upload', { method:'POST', body: fd });
+        
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(errorText || `Upload failed with status ${res.status}`);
+        }
 
-    statusDiv.innerHTML = "Upload complete!";
-    console.log(data);
+        const data = await res.json();
+        statusDiv.innerHTML = "Upload complete!";
+        console.log(data);
+        
+        // Optionally reset the form
+        document.getElementById('uploadForm').reset();
+        spotifyMetadata = null;
+        selectedArtistId = null;
+        selectedTrackId = null;
+        document.getElementById('metadataPreview').style.display = 'none';
+        document.getElementById('additionalMetadata').style.display = 'none';
+        
+    } catch (err) {
+        console.error('Upload error:', err);
+        statusDiv.innerHTML = `Upload failed: ${err.message}`;
+        statusDiv.style.color = 'red';
+    }
 });
 </script>
 
