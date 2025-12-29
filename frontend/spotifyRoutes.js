@@ -549,8 +549,8 @@ router.get("/genre/tracks", async (req, res) => {
     const token = await getSpotifyToken();
     let allTracks = [];
 
-    // Strategy 1: Get top artists for this genre, then get their popular tracks
-    // This is more reliable since genres are associated with artists
+    // Strategy: Get top artists for this genre, then get their popular tracks
+    // This is the most reliable approach since genres are associated with artists, not tracks
     try {
       // Get artists with this genre - use multiple pages to get more artists
       let allGenreArtists = [];
@@ -579,15 +579,15 @@ router.get("/genre/tracks", async (req, res) => {
         if (artistsData.artists.items.length < 50) break;
       }
 
-      // Sort by followers and take top 50 artists
+      // Sort by followers and take top 60 artists (to get more tracks)
       const topArtists = allGenreArtists
         .sort((a, b) => b.followers.total - a.followers.total)
-        .slice(0, 50);
+        .slice(0, 60);
 
       console.log(`Found ${topArtists.length} artists for genre "${genre}"`);
 
-      // Get top tracks for each artist (limit to avoid too many API calls)
-      const artistPromises = topArtists.slice(0, 50).map(async (artist) => {
+      // Get top tracks for each artist
+      const artistPromises = topArtists.map(async (artist) => {
         try {
           const topTracksRes = await fetch(
             `https://api.spotify.com/v1/artists/${artist.id}/top-tracks?market=US`,
@@ -600,17 +600,20 @@ router.get("/genre/tracks", async (req, res) => {
 
           if (topTracksRes.ok) {
             const topTracksData = await topTracksRes.json();
-            return topTracksData.tracks.map(track => ({
-              id: track.id,
-              name: track.name,
-              artist: track.artists[0]?.name || 'Unknown',
-              artistId: track.artists[0]?.id,
-              popularity: track.popularity,
-              album: track.album.name,
-              albumImageUrl: track.album.images[0]?.url || null,
-              releaseDate: track.album.release_date,
-              durationMs: track.duration_ms
-            }));
+            const tracks = topTracksData.tracks
+              .filter(track => track.popularity > 0) // Filter out tracks with 0 popularity
+              .map(track => ({
+                id: track.id,
+                name: track.name,
+                artist: track.artists[0]?.name || 'Unknown',
+                artistId: track.artists[0]?.id,
+                popularity: track.popularity,
+                album: track.album.name,
+                albumImageUrl: track.album.images[0]?.url || null,
+                releaseDate: track.album.release_date,
+                durationMs: track.duration_ms
+              }));
+            return tracks;
           }
           return [];
         } catch (err) {
@@ -622,17 +625,18 @@ router.get("/genre/tracks", async (req, res) => {
       // Wait for all artist track requests
       const tracksArrays = await Promise.all(artistPromises);
       allTracks = tracksArrays.flat();
-      console.log(`Got ${allTracks.length} tracks from artists`);
+      console.log(`Got ${allTracks.length} tracks from artists (after filtering 0 popularity)`);
 
     } catch (err) {
-      console.warn("Artist-based genre search failed:", err);
+      console.error("Artist-based genre search failed:", err);
     }
 
-    // Strategy 2: Direct track search with pagination as supplement
-    try {
-      for (let offset = 0; offset < 200 && allTracks.length < 200; offset += 50) {
-        const directRes = await fetch(
-          `https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(genre)}"&type=track&limit=50&offset=${offset}`,
+    // Additional Strategy: Try a general text search as supplement (not genre filter)
+    // This can help find popular tracks with the genre term in the name or metadata
+    if (allTracks.length < 50) {
+      try {
+        const textSearchRes = await fetch(
+          `https://api.spotify.com/v1/search?q=${encodeURIComponent(genre)}&type=track&limit=50&market=US`,
           {
             headers: {
               Authorization: `Bearer ${token}`
@@ -640,41 +644,46 @@ router.get("/genre/tracks", async (req, res) => {
           }
         );
 
-        if (!directRes.ok) break;
-
-        const directData = await directRes.json();
-        if (directData.tracks.items.length === 0) break;
-
-        const directTracks = directData.tracks.items.map(track => ({
-          id: track.id,
-          name: track.name,
-          artist: track.artists[0]?.name || 'Unknown',
-          artistId: track.artists[0]?.id,
-          popularity: track.popularity,
-          album: track.album.name,
-          albumImageUrl: track.album.images[0]?.url || null,
-          releaseDate: track.album.release_date,
-          durationMs: track.duration_ms
-        }));
-        allTracks = [...allTracks, ...directTracks];
-
-        if (directData.tracks.items.length < 50) break;
+        if (textSearchRes.ok) {
+          const textSearchData = await textSearchRes.json();
+          const textTracks = textSearchData.tracks.items
+            .filter(track => track.popularity > 0) // Only include tracks with popularity > 0
+            .map(track => ({
+              id: track.id,
+              name: track.name,
+              artist: track.artists[0]?.name || 'Unknown',
+              artistId: track.artists[0]?.id,
+              popularity: track.popularity,
+              album: track.album.name,
+              albumImageUrl: track.album.images[0]?.url || null,
+              releaseDate: track.album.release_date,
+              durationMs: track.duration_ms
+            }));
+          allTracks = [...allTracks, ...textTracks];
+          console.log(`Added ${textTracks.length} tracks from text search`);
+        }
+      } catch (err) {
+        console.warn("Text search supplement failed:", err);
       }
-      console.log(`Total tracks after direct search: ${allTracks.length}`);
-    } catch (err) {
-      console.warn("Direct track search failed:", err);
     }
 
-    // Remove duplicates, sort by popularity, and take top 100
+    // Remove duplicates, filter out tracks with 0 popularity, sort by popularity, and take top 100
     const uniqueTracks = Array.from(
       new Map(allTracks.map(track => [track.id, track])).values()
     );
 
-    const results = uniqueTracks
+    // Final filter to ensure no 0 popularity tracks
+    const validTracks = uniqueTracks.filter(track => track.popularity > 0);
+
+    const results = validTracks
       .sort((a, b) => b.popularity - a.popularity)
       .slice(0, 100); // Top 100
 
-    console.log(`Returning ${results.length} unique tracks for genre "${genre}"`);
+    console.log(`Returning ${results.length} unique tracks for genre "${genre}" (with popularity > 0)`);
+    if (results.length > 0) {
+      console.log(`Popularity range: ${results[results.length - 1].popularity} - ${results[0].popularity}`);
+    }
+    
     res.json(results);
   } catch (err) {
     console.error("Spotify genre tracks search error:", err);
