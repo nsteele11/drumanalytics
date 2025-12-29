@@ -3,7 +3,7 @@ import multer from "multer";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from "dotenv";
 import fs from "fs";
@@ -367,6 +367,49 @@ app.get("/api/videos/:s3Key/play", async (req, res) => {
   } catch (err) {
     console.error("Error generating video URL:", err);
     res.status(500).json({ error: "Failed to generate video URL", message: err.message });
+  }
+});
+
+// ----------------------
+// Delete Video Endpoint
+// ----------------------
+app.delete("/api/videos/:s3Key", async (req, res) => {
+  try {
+    const { s3Key } = req.params;
+    
+    if (!s3Key) {
+      return res.status(400).json({ error: "Video key is required" });
+    }
+
+    if (!process.env.S3_BUCKET_NAME) {
+      console.error("S3_BUCKET_NAME environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    // Delete the video file
+    const deleteVideoCommand = new DeleteObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: s3Key,
+    });
+
+    // Delete the JSON metadata file
+    const deleteMetadataCommand = new DeleteObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: `results/${s3Key}.json`,
+    });
+
+    // Delete both files in parallel
+    await Promise.all([
+      s3.send(deleteVideoCommand),
+      s3.send(deleteMetadataCommand)
+    ]);
+
+    console.log(`Deleted video and metadata for: ${s3Key}`);
+    
+    res.json({ message: "Video and metadata deleted successfully", s3Key });
+  } catch (err) {
+    console.error("Error deleting video:", err);
+    res.status(500).json({ error: "Failed to delete video", message: err.message });
   }
 });
 

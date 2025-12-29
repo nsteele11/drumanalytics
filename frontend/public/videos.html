@@ -116,6 +116,9 @@ function createVideoCard(video) {
                     <button class="play-video-btn" data-s3key="${escapeHtml(video.s3Key)}">
                         ▶ Play Video
                     </button>
+                    <button class="delete-video-btn" data-s3key="${escapeHtml(video.s3Key)}">
+                        🗑️ Delete
+                    </button>
                 </div>
             </div>
         </div>
@@ -125,6 +128,12 @@ function createVideoCard(video) {
     const playBtn = card.querySelector('.play-video-btn');
     playBtn.addEventListener('click', async () => {
         await playVideo(video.s3Key, playBtn);
+    });
+
+    // Add click handler for delete button
+    const deleteBtn = card.querySelector('.delete-video-btn');
+    deleteBtn.addEventListener('click', async () => {
+        await deleteVideo(video.s3Key, card, video.trackName, video.artistName);
     });
 
     return card;
@@ -153,6 +162,54 @@ async function playVideo(s3Key, button) {
     } finally {
         button.disabled = false;
         button.textContent = originalText;
+    }
+}
+
+async function deleteVideo(s3Key, cardElement, trackName, artistName) {
+    // Confirm deletion
+    const confirmMessage = `Are you sure you want to delete "${trackName}" by ${artistName}? This will permanently delete the video and all related data.`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    const deleteBtn = cardElement.querySelector('.delete-video-btn');
+    const originalText = deleteBtn.textContent;
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = 'Deleting...';
+
+    try {
+        const response = await fetch(`/api/videos/${encodeURIComponent(s3Key)}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to delete video: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Video deleted:', data);
+        
+        // Remove the card from the DOM with a fade-out effect
+        cardElement.style.transition = 'opacity 0.3s ease';
+        cardElement.style.opacity = '0';
+        
+        setTimeout(() => {
+            cardElement.remove();
+            
+            // Check if no videos left
+            const videosContainer = document.getElementById('videosContainer');
+            if (videosContainer.children.length === 0) {
+                videosContainer.innerHTML = '<p style="text-align: center; padding: 40px; color: #666;">No videos uploaded yet.</p>';
+            }
+        }, 300);
+        
+    } catch (err) {
+        alert(`Error deleting video: ${err.message}`);
+        console.error('Error deleting video:', err);
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = originalText;
     }
 }
 
