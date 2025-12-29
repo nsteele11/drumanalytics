@@ -227,6 +227,12 @@ app.post("/upload", upload.single("video"), async (req, res) => {
 // ----------------------
 app.get("/api/videos", async (req, res) => {
   try {
+    // Validate environment variable
+    if (!process.env.S3_BUCKET_NAME) {
+      console.error("S3_BUCKET_NAME environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
     // List all objects in the S3 bucket
     const listCommand = new ListObjectsV2Command({
       Bucket: process.env.S3_BUCKET_NAME,
@@ -244,7 +250,7 @@ app.get("/api/videos", async (req, res) => {
     
     for (const obj of listResponse.Contents) {
       // Skip if it's not a JSON file
-      if (!obj.Key.endsWith('.json')) continue;
+      if (!obj.Key || !obj.Key.endsWith('.json')) continue;
       
       try {
         // Get the metadata file
@@ -256,17 +262,18 @@ app.get("/api/videos", async (req, res) => {
         const metadataResponse = await s3.send(getMetadataCommand);
         const metadataStream = metadataResponse.Body;
         
-        // Convert stream to string
+        // Convert stream to string - AWS SDK v3 returns a Readable stream
         const metadataText = await new Promise((resolve, reject) => {
-          if (metadataStream instanceof Readable) {
-            const chunks = [];
-            metadataStream.on('data', chunk => chunks.push(chunk));
-            metadataStream.on('end', () => resolve(Buffer.concat(chunks).toString()));
-            metadataStream.on('error', reject);
-          } else {
-            // If it's already a buffer or string
-            resolve(metadataStream.toString());
-          }
+          const chunks = [];
+          metadataStream.on('data', (chunk) => chunks.push(chunk));
+          metadataStream.on('end', () => {
+            try {
+              resolve(Buffer.concat(chunks).toString('utf-8'));
+            } catch (err) {
+              reject(err);
+            }
+          });
+          metadataStream.on('error', reject);
         });
 
         const metadata = JSON.parse(metadataText);
@@ -311,6 +318,15 @@ app.get("/api/videos/:s3Key/play", async (req, res) => {
   try {
     const { s3Key } = req.params;
     
+    if (!s3Key) {
+      return res.status(400).json({ error: "Video key is required" });
+    }
+
+    if (!process.env.S3_BUCKET_NAME) {
+      console.error("S3_BUCKET_NAME environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+    
     const command = new GetObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
       Key: s3Key,
@@ -322,7 +338,7 @@ app.get("/api/videos/:s3Key/play", async (req, res) => {
     res.json({ url: signedUrl });
   } catch (err) {
     console.error("Error generating video URL:", err);
-    res.status(500).json({ error: "Failed to generate video URL" });
+    res.status(500).json({ error: "Failed to generate video URL", message: err.message });
   }
 });
 
