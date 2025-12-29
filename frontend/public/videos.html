@@ -111,23 +111,34 @@ function createVideoCard(video) {
                 
                 <div class="video-metadata">
                     ${video.album ? `<div class="video-meta-item"><strong>Album:</strong> ${escapeHtml(video.album)}</div>` : ''}
-                    ${video.releaseDate ? `<div class="video-meta-item"><strong>Release Date:</strong> ${escapeHtml(video.releaseDate)}</div>` : ''}
                     ${video.popularity !== null ? `<div class="video-meta-item"><strong>Popularity:</strong> ${video.popularity}/100</div>` : ''}
                     ${video.artistFollowers !== null ? `<div class="video-meta-item"><strong>Artist Followers:</strong> ${video.artistFollowers.toLocaleString()}</div>` : ''}
                     ${video.genres && video.genres.length > 0 ? `<div class="video-meta-item"><strong>Genres:</strong> ${escapeHtml(video.genres.join(', '))}</div>` : ''}
                     ${video.duration ? `<div class="video-meta-item"><strong>Duration:</strong> ${formatDuration(video.duration)}</div>` : ''}
                     ${video.bpm ? `<div class="video-meta-item"><strong>BPM:</strong> ${video.bpm}</div>` : ''}
                     ${video.shockValue !== null ? `<div class="video-meta-item"><strong>Shock Value:</strong> <span style="font-weight: bold; color: ${getShockValueColor(video.shockValue)};">${video.shockValue}/100</span></div>` : ''}
-                    ${video.pitch ? `<div class="video-meta-item"><strong>Avg Pitch:</strong> ${video.pitch} Hz${video.pitchConfidence ? ` (confidence: ${video.pitchConfidence})` : ''}</div>` : ''}
-                    ${video.onsets !== null ? `<div class="video-meta-item"><strong>Onsets:</strong> ${video.onsets} (${video.onsetRate || 0}/sec)</div>` : ''}
-                    ${video.energy !== null ? `<div class="video-meta-item"><strong>Energy:</strong> ${video.energy} dB</div>` : ''}
-                    ${video.silenceRatio !== null ? `<div class="video-meta-item"><strong>Silence Ratio:</strong> ${(video.silenceRatio * 100).toFixed(1)}%</div>` : ''}
+                    
+                    <!-- Social Media Metrics Section -->
+                    <div class="social-metrics-section" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">Social Media Metrics</h4>
+                        ${video.igHashtags ? `<div class="video-meta-item"><strong>IG Hashtags:</strong> ${escapeHtml(video.igHashtags)}</div>` : ''}
+                        ${video.tiktokHashtags ? `<div class="video-meta-item"><strong>TikTok Hashtags:</strong> ${escapeHtml(video.tiktokHashtags)}</div>` : ''}
+                        ${video.igViews !== null ? `<div class="video-meta-item"><strong>IG Views:</strong> ${video.igViews.toLocaleString()}</div>` : ''}
+                        ${video.igLikes !== null ? `<div class="video-meta-item"><strong>IG Likes:</strong> ${video.igLikes.toLocaleString()}</div>` : ''}
+                        ${video.tiktokViews !== null ? `<div class="video-meta-item"><strong>TikTok Views:</strong> ${video.tiktokViews.toLocaleString()}</div>` : ''}
+                        ${video.tiktokLikes !== null ? `<div class="video-meta-item"><strong>TikTok Likes:</strong> ${video.tiktokLikes.toLocaleString()}</div>` : ''}
+                        ${video.metricsUpdatedAt ? `<div class="video-meta-item" style="font-size: 12px; color: #666; font-style: italic;"><strong>As of:</strong> ${formatDate(video.metricsUpdatedAt)}</div>` : ''}
+                    </div>
+                    
                     <div class="video-meta-item"><strong>Uploaded:</strong> ${uploadDate}</div>
                 </div>
 
                 <div class="video-actions">
                     <button class="play-video-btn" data-s3key="${escapeHtml(video.s3Key)}">
                         ▶ Play Video
+                    </button>
+                    <button class="edit-metrics-btn" data-s3key="${escapeHtml(video.s3Key)}">
+                        ✏️ Edit Metrics
                     </button>
                     <button class="delete-video-btn" data-s3key="${escapeHtml(video.s3Key)}">
                         🗑️ Delete
@@ -141,6 +152,12 @@ function createVideoCard(video) {
     const playBtn = card.querySelector('.play-video-btn');
     playBtn.addEventListener('click', async () => {
         await playVideo(video.s3Key, playBtn);
+    });
+
+    // Add click handler for edit button
+    const editBtn = card.querySelector('.edit-metrics-btn');
+    editBtn.addEventListener('click', () => {
+        openEditMetricsModal(video, card);
     });
 
     // Add click handler for delete button
@@ -266,6 +283,117 @@ function getShockValueColor(score) {
     if (score >= 70) return '#dc3545'; // Red - high shock
     if (score >= 40) return '#ffc107'; // Yellow - medium shock
     return '#28a745'; // Green - low shock
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit'
+    });
+}
+
+// Edit Metrics Modal
+function openEditMetricsModal(video, cardElement) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'edit-metrics-modal';
+    modal.innerHTML = `
+        <div class="edit-metrics-modal-content">
+            <div class="edit-metrics-modal-header">
+                <h2>Edit Metrics - ${escapeHtml(video.trackName)}</h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <form id="editMetricsForm" class="edit-metrics-form">
+                <div class="form-group">
+                    <label>IG Hashtags</label>
+                    <input type="text" id="edit-ig-hashtags" value="${escapeHtml(video.igHashtags || '')}" placeholder="e.g., #drumming #music">
+                </div>
+                <div class="form-group">
+                    <label>TikTok Hashtags</label>
+                    <input type="text" id="edit-tiktok-hashtags" value="${escapeHtml(video.tiktokHashtags || '')}" placeholder="e.g., #drumming #music">
+                </div>
+                <div class="form-group">
+                    <label>IG Views</label>
+                    <input type="number" id="edit-ig-views" value="${video.igViews || ''}" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>IG Likes</label>
+                    <input type="number" id="edit-ig-likes" value="${video.igLikes || ''}" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>TikTok Views</label>
+                    <input type="number" id="edit-tiktok-views" value="${video.tiktokViews || ''}" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>TikTok Likes</label>
+                    <input type="number" id="edit-tiktok-likes" value="${video.tiktokLikes || ''}" placeholder="0" min="0">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn">Cancel</button>
+                    <button type="submit" class="save-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close modal handlers
+    const closeBtn = modal.querySelector('.close-modal-btn');
+    const cancelBtn = modal.querySelector('.cancel-btn');
+    const closeModal = () => {
+        document.body.removeChild(modal);
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    
+    // Form submission
+    const form = modal.querySelector('#editMetricsForm');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const metrics = {
+            igHashtags: document.getElementById('edit-ig-hashtags').value.trim() || null,
+            tiktokHashtags: document.getElementById('edit-tiktok-hashtags').value.trim() || null,
+            igViews: document.getElementById('edit-ig-views').value ? parseInt(document.getElementById('edit-ig-views').value) : null,
+            igLikes: document.getElementById('edit-ig-likes').value ? parseInt(document.getElementById('edit-ig-likes').value) : null,
+            tiktokViews: document.getElementById('edit-tiktok-views').value ? parseInt(document.getElementById('edit-tiktok-views').value) : null,
+            tiktokLikes: document.getElementById('edit-tiktok-likes').value ? parseInt(document.getElementById('edit-tiktok-likes').value) : null,
+        };
+        
+        try {
+            const response = await fetch(`/api/videos/${encodeURIComponent(video.s3Key)}/metrics`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(metrics)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Failed to update metrics: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Metrics updated:', data);
+            
+            // Reload videos to show updated data
+            closeModal();
+            loadVideos();
+            
+        } catch (err) {
+            alert(`Error updating metrics: ${err.message}`);
+            console.error('Error updating metrics:', err);
+        }
+    });
 }
 
 // Load videos when page loads

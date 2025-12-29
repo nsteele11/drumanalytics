@@ -31,6 +31,7 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 // ----------------------
 const app = express();
 app.use(cors());
+app.use(express.json()); // Parse JSON request bodies
 
 const publicDir = path.join(__dirname, "public");
 console.log("SERVER2 serving static files from:", publicDir);
@@ -403,6 +404,14 @@ app.get("/api/videos", async (req, res) => {
           snapshotKey: metadata.snapshotKey || null,
           analyzedAt: metadata.analyzedAt || null,
           uploadTimestamp: metadata.s3Key ? parseInt(metadata.s3Key.split('-')[0]) : null,
+          // Social media metrics
+          igHashtags: metadata.igHashtags || null,
+          tiktokHashtags: metadata.tiktokHashtags || null,
+          igViews: metadata.igViews || null,
+          igLikes: metadata.igLikes || null,
+          tiktokViews: metadata.tiktokViews || null,
+          tiktokLikes: metadata.tiktokLikes || null,
+          metricsUpdatedAt: metadata.metricsUpdatedAt || null,
           // Include analysis data if available
           duration: metadata.analysis?.duration || null,
           size_mb: metadata.analysis?.size_mb || null,
@@ -501,6 +510,95 @@ app.get("/api/videos/:s3Key/snapshot", async (req, res) => {
   } catch (err) {
     console.error("Error generating snapshot URL:", err);
     res.status(500).json({ error: "Failed to generate snapshot URL", message: err.message });
+  }
+});
+
+// ----------------------
+// Update Video Metrics Endpoint
+// ----------------------
+app.put("/api/videos/:s3Key/metrics", async (req, res) => {
+  try {
+    const { s3Key } = req.params;
+    const { igHashtags, tiktokHashtags, igViews, igLikes, tiktokViews, tiktokLikes } = req.body;
+    
+    if (!s3Key) {
+      return res.status(400).json({ error: "Video key is required" });
+    }
+
+    if (!process.env.S3_BUCKET_NAME) {
+      console.error("S3_BUCKET_NAME environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    // Get the existing metadata file
+    const metadataKey = `results/${s3Key}.json`;
+    const getMetadataCommand = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: metadataKey,
+    });
+
+    let metadata;
+    try {
+      const metadataResponse = await s3.send(getMetadataCommand);
+      const metadataStream = metadataResponse.Body;
+      
+      // Convert stream to string
+      const metadataText = await new Promise((resolve, reject) => {
+        const chunks = [];
+        metadataStream.on('data', (chunk) => chunks.push(chunk));
+        metadataStream.on('end', () => {
+          try {
+            resolve(Buffer.concat(chunks).toString('utf-8'));
+          } catch (err) {
+            reject(err);
+          }
+        });
+        metadataStream.on('error', reject);
+      });
+
+      metadata = JSON.parse(metadataText);
+    } catch (err) {
+      console.error("Error fetching metadata:", err);
+      return res.status(404).json({ error: "Video metadata not found" });
+    }
+
+    // Update the metrics
+    metadata.igHashtags = igHashtags || null;
+    metadata.tiktokHashtags = tiktokHashtags || null;
+    metadata.igViews = igViews !== undefined && igViews !== null ? Number(igViews) : null;
+    metadata.igLikes = igLikes !== undefined && igLikes !== null ? Number(igLikes) : null;
+    metadata.tiktokViews = tiktokViews !== undefined && tiktokViews !== null ? Number(tiktokViews) : null;
+    metadata.tiktokLikes = tiktokLikes !== undefined && tiktokLikes !== null ? Number(tiktokLikes) : null;
+    metadata.metricsUpdatedAt = new Date().toISOString();
+
+    // Save updated metadata back to S3
+    const putMetadataCommand = new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: metadataKey,
+      Body: JSON.stringify(metadata, null, 2),
+      ContentType: "application/json",
+    });
+
+    await s3.send(putMetadataCommand);
+
+    console.log(`Updated metrics for video: ${s3Key}`);
+    
+    res.json({ 
+      message: "Metrics updated successfully", 
+      s3Key,
+      metrics: {
+        igHashtags: metadata.igHashtags,
+        tiktokHashtags: metadata.tiktokHashtags,
+        igViews: metadata.igViews,
+        igLikes: metadata.igLikes,
+        tiktokViews: metadata.tiktokViews,
+        tiktokLikes: metadata.tiktokLikes,
+        metricsUpdatedAt: metadata.metricsUpdatedAt
+      }
+    });
+  } catch (err) {
+    console.error("Error updating video metrics:", err);
+    res.status(500).json({ error: "Failed to update metrics", message: err.message });
   }
 });
 
