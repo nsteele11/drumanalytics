@@ -283,9 +283,12 @@ function updateTrackDropdown(tracks, filterQuery = '') {
     
     displayTracks.forEach(t => {
         const li = document.createElement('li');
-        li.textContent = t.name;
+        // Show track name with album in parentheses if available
+        const displayText = t.album ? `${t.name} (${t.album})` : t.name;
+        li.textContent = displayText;
         li.onclick = async () => {
             selectedTrackId = t.id;
+            // Store just the track name (without album) in the input
             trackSearchInput.value = t.name;
             trackResults.innerHTML = '';
 

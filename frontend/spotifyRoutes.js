@@ -115,6 +115,8 @@ router.get("/search/tracks", async (req, res) => {
           id: track.id,
           name: track.name,
           album: track.album.name,
+          albumType: track.album.album_type, // 'album', 'single', 'compilation'
+          releaseDate: track.album.release_date,
           preview_url: track.preview_url
         }));
 
@@ -128,10 +130,35 @@ router.get("/search/tracks", async (req, res) => {
       offset += limit;
     }
 
-    // Remove duplicates (same track ID)
-    const uniqueTracks = Array.from(
-      new Map(allTracks.map(track => [track.id, track])).values()
-    );
+    // Remove duplicates by track ID, preferring tracks from albums over singles/compilations
+    const trackMap = new Map();
+    
+    // Priority order: album > single > compilation
+    const getAlbumPriority = (albumType) => {
+      if (albumType === 'album') return 3;
+      if (albumType === 'single') return 2;
+      if (albumType === 'compilation') return 1;
+      return 0;
+    };
+    
+    allTracks.forEach(track => {
+      if (!trackMap.has(track.id)) {
+        // First time seeing this track ID, add it
+        trackMap.set(track.id, track);
+      } else {
+        // We've seen this track before, check if we should replace it
+        const existingTrack = trackMap.get(track.id);
+        const existingPriority = getAlbumPriority(existingTrack.albumType);
+        const newPriority = getAlbumPriority(track.albumType);
+        
+        // Replace if new version has higher priority (prefer albums over singles/compilations)
+        if (newPriority > existingPriority) {
+          trackMap.set(track.id, track);
+        }
+      }
+    });
+    
+    const uniqueTracks = Array.from(trackMap.values());
 
     // Filter tracks by the search query (case-insensitive) if provided
     let filteredTracks = uniqueTracks;
