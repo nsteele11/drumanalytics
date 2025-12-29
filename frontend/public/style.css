@@ -487,6 +487,39 @@ input[type="file"] {
     }
 }
 
+/* Artist Analysis Section */
+.artist-analysis-section {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 2px solid #e0e0e0;
+}
+
+.artist-analysis-section h2 {
+    margin-top: 0;
+    color: #333;
+    font-size: 22px;
+}
+
+.artist-analysis-search {
+    margin-bottom: 30px;
+}
+
+.artist-analysis-search label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #333;
+}
+
+.artist-analysis-search input[type="text"] {
+    width: 100%;
+    max-width: 400px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
 /* Genre Analysis Section */
 .genre-section {
     margin-top: 40px;

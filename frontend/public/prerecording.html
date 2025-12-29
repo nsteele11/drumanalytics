@@ -70,6 +70,41 @@
             <button id="clearComparison" class="clear-button">Clear All</button>
         </div>
 
+        <!-- Artist Analysis Section -->
+        <div class="artist-analysis-section">
+            <h2>Artist Analysis</h2>
+            <p style="color: #666; margin-bottom: 20px;">Select an artist to see their top 30 tracks by popularity</p>
+            
+            <div class="artist-analysis-search">
+                <label>Select Artist</label><br>
+                <input type="text" id="artist-analysis-search" placeholder="Type artist name" autocomplete="off">
+                <ul id="artist-analysis-results" class="search-results"></ul>
+            </div>
+
+            <div id="artistAnalysisResults" style="display: none;">
+                <div id="artistAnalysisLoading" style="text-align: center; padding: 20px; display: none;">
+                    Loading artist tracks...
+                </div>
+
+                <div class="table-container">
+                    <table class="comparison-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Track</th>
+                                <th>Album</th>
+                                <th>Popularity</th>
+                                <th>Release Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="artistTracksTableBody">
+                            <!-- Rows will be added here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- Genre Analysis Section -->
         <div class="genre-section">
             <h2>Genre Analysis</h2>
@@ -472,6 +507,84 @@ async function loadGenreData(genre) {
         genreLoading.style.display = 'none';
         alert(`Error loading genre data: ${err.message}`);
         console.error('Error loading genre data:', err);
+    }
+}
+
+/* -----------------------------
+   ARTIST ANALYSIS
+--------------------------------*/
+let selectedAnalysisArtistId = null;
+const artistAnalysisSearchInput = document.getElementById('artist-analysis-search');
+const artistAnalysisResults = document.getElementById('artist-analysis-results');
+const artistAnalysisSection = document.getElementById('artistAnalysisResults');
+const artistAnalysisLoading = document.getElementById('artistAnalysisLoading');
+const artistTracksTableBody = document.getElementById('artistTracksTableBody');
+
+artistAnalysisSearchInput.addEventListener('input', async (e) => {
+    const query = e.target.value;
+    artistAnalysisResults.innerHTML = '';
+    if (!query) {
+        selectedAnalysisArtistId = null;
+        artistAnalysisSection.style.display = 'none';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/spotify/search/artists?q=${encodeURIComponent(query)}`);
+        const artists = await res.json();
+
+        artists.forEach(a => {
+            const li = document.createElement('li');
+            li.textContent = `${a.name} (${a.followers.toLocaleString()} followers)`;
+            li.onclick = async () => {
+                selectedAnalysisArtistId = a.spotify_artist_id;
+                artistAnalysisSearchInput.value = a.name;
+                artistAnalysisResults.innerHTML = '';
+                await loadArtistPopularTracks(selectedAnalysisArtistId);
+            };
+            artistAnalysisResults.appendChild(li);
+        });
+    } catch (err) {
+        console.error('Error searching artists:', err);
+    }
+});
+
+async function loadArtistPopularTracks(artistId) {
+    artistAnalysisLoading.style.display = 'block';
+    artistAnalysisSection.style.display = 'none';
+    artistTracksTableBody.innerHTML = '';
+
+    try {
+        const res = await fetch(`/api/spotify/artist/${artistId}/tracks/popular`);
+        
+        if (!res.ok) {
+            throw new Error('Failed to load artist tracks');
+        }
+
+        const tracks = await res.json();
+        artistAnalysisLoading.style.display = 'none';
+
+        if (tracks.length === 0) {
+            artistTracksTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No tracks found for this artist</td></tr>';
+        } else {
+            tracks.forEach((track, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(track.name)}</td>
+                    <td>${escapeHtml(track.album || 'N/A')}</td>
+                    <td>${track.popularity}</td>
+                    <td>${escapeHtml(track.releaseDate || 'N/A')}</td>
+                `;
+                artistTracksTableBody.appendChild(row);
+            });
+        }
+
+        artistAnalysisSection.style.display = 'block';
+    } catch (err) {
+        artistAnalysisLoading.style.display = 'none';
+        alert(`Error loading artist tracks: ${err.message}`);
+        console.error('Error loading artist tracks:', err);
     }
 }
 </script>

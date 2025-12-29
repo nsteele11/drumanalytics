@@ -187,6 +187,104 @@ router.get("/artist/:artistId/tracks", async (req, res) => {
 });
 
 /**
+ * GET /api/spotify/artist/:artistId/tracks/popular
+ * Returns top 30 tracks for an artist sorted by popularity
+ */
+router.get("/artist/:artistId/tracks/popular", async (req, res) => {
+  const artistId = req.params.artistId;
+
+  if (!artistId) {
+    return res.status(400).json({ error: "artistId is required" });
+  }
+
+  try {
+    const token = await getSpotifyToken();
+
+    // First, get the artist name to search for tracks
+    const artistRes = await fetch(
+      `https://api.spotify.com/v1/artists/${artistId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!artistRes.ok) {
+      throw new Error(`Failed to get artist: ${artistRes.status}`);
+    }
+
+    const artistData = await artistRes.json();
+    const artistName = artistData.name;
+
+    // Search for tracks by this artist
+    let allTracks = [];
+    let offset = 0;
+    const limit = 50;
+    const maxTracks = 100; // Get enough to find top 30 by popularity
+
+    while (offset < maxTracks) {
+      const searchRes = await fetch(
+        `https://api.spotify.com/v1/search?q=artist:"${encodeURIComponent(artistName)}"&type=track&limit=${limit}&offset=${offset}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!searchRes.ok) {
+        console.warn(`Failed to fetch tracks at offset ${offset}: ${searchRes.status}`);
+        break;
+      }
+
+      const searchData = await searchRes.json();
+      const tracks = searchData.tracks.items;
+
+      if (tracks.length === 0) {
+        break;
+      }
+
+      // Filter to only tracks where this artist is the primary artist
+      const artistTracks = tracks
+        .filter(track => track.artists.some(artist => artist.id === artistId))
+        .map(track => ({
+          id: track.id,
+          name: track.name,
+          popularity: track.popularity,
+          album: track.album.name,
+          albumImageUrl: track.album.images[0]?.url || null,
+          releaseDate: track.album.release_date,
+          durationMs: track.duration_ms
+        }));
+
+      allTracks = [...allTracks, ...artistTracks];
+
+      if (tracks.length < limit) {
+        break;
+      }
+
+      offset += limit;
+    }
+
+    // Remove duplicates and sort by popularity (descending)
+    const uniqueTracks = Array.from(
+      new Map(allTracks.map(track => [track.id, track])).values()
+    );
+
+    // Sort by popularity (descending) and take top 30
+    const topTracks = uniqueTracks
+      .sort((a, b) => b.popularity - a.popularity)
+      .slice(0, 30);
+
+    res.json(topTracks);
+  } catch (err) {
+    console.error("Spotify artist popular tracks error:", err);
+    res.status(500).json({ error: "Failed to fetch tracks from Spotify" });
+  }
+});
+
+/**
  * GET /api/spotify/track/:trackId
  * Returns full track metadata including album image and artist followers
  */
