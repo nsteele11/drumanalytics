@@ -231,9 +231,13 @@ input[type="file"] {
 
 .video-album-section {
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-.video-album-cover {
+.video-album-cover,
+.video-snapshot {
     width: 120px;
     height: 120px;
     object-fit: cover;
@@ -526,10 +530,17 @@ input[type="file"] {
     }
     
     .video-album-cover,
+    .video-snapshot,
     .video-album-placeholder {
         width: 100%;
         max-width: 200px;
         margin: 0 auto;
+    }
+    
+    .video-album-section {
+        flex-direction: row;
+        justify-content: center;
+        gap: 10px;
     }
     
     .table-container {

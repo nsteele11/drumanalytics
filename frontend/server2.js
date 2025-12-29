@@ -9,6 +9,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import { Readable } from "stream";
 import { analyzeVideo } from "../analysis/analyze_video.js";
+import { extractVideoSnapshot } from "../analysis/extract_snapshot.js";
 import spotifyRoutes from "./spotifyRoutes.js";
 
 dotenv.config();
@@ -199,6 +200,41 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     }
 
     // ----------------------
+    // Extract video snapshot
+    // ----------------------
+    let snapshotKey = null;
+    try {
+      console.log("Extracting video snapshot...");
+      const snapshotPath = path.join(uploadDir, `snapshot_${Date.now()}.jpg`);
+      await extractVideoSnapshot(file.path, snapshotPath);
+      
+      // Upload snapshot to S3
+      const snapshotContent = fs.readFileSync(snapshotPath);
+      snapshotKey = `snapshots/${s3Key}.jpg`;
+      
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME,
+          Key: snapshotKey,
+          Body: snapshotContent,
+          ContentType: "image/jpeg",
+        })
+      );
+      
+      console.log("Snapshot uploaded to S3:", snapshotKey);
+      
+      // Clean up local snapshot file
+      try {
+        fs.unlinkSync(snapshotPath);
+      } catch (cleanupError) {
+        console.warn("Failed to cleanup snapshot file:", cleanupError);
+      }
+    } catch (snapshotError) {
+      console.warn("Snapshot extraction failed:", snapshotError.message);
+      // Don't fail the upload if snapshot extraction fails
+    }
+
+    // ----------------------
     // Save analysis JSON locally
     // ----------------------
     const resultsDir = path.join(uploadDir, "results");
@@ -212,6 +248,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
       videoType,
       analysis,
       analyzedAt: new Date().toISOString(),
+      snapshotKey: snapshotKey || null,
     };
 
     // Add artist and track information based on type
@@ -363,6 +400,7 @@ app.get("/api/videos", async (req, res) => {
           artistFollowers: metadata.spotify?.artist?.followers || null,
           genres: metadata.spotify?.artist?.genres || [],
           albumImageUrl: metadata.spotify?.track?.album_image_url || null,
+          snapshotKey: metadata.snapshotKey || null,
           analyzedAt: metadata.analyzedAt || null,
           uploadTimestamp: metadata.s3Key ? parseInt(metadata.s3Key.split('-')[0]) : null,
           // Include analysis data if available
@@ -431,6 +469,38 @@ app.get("/api/videos/:s3Key/play", async (req, res) => {
 });
 
 // ----------------------
+// Get Snapshot Image URL Endpoint
+// ----------------------
+app.get("/api/videos/:s3Key/snapshot", async (req, res) => {
+  try {
+    const { s3Key } = req.params;
+    
+    if (!s3Key) {
+      return res.status(400).json({ error: "Video key is required" });
+    }
+
+    if (!process.env.S3_BUCKET_NAME) {
+      console.error("S3_BUCKET_NAME environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+    
+    const snapshotKey = `snapshots/${s3Key}.jpg`;
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: snapshotKey,
+    });
+
+    // Generate a signed URL that expires in 1 hour
+    const signedUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+    
+    res.json({ url: signedUrl });
+  } catch (err) {
+    console.error("Error generating snapshot URL:", err);
+    res.status(500).json({ error: "Failed to generate snapshot URL", message: err.message });
+  }
+});
+
+// ----------------------
 // Delete Video Endpoint
 // ----------------------
 app.delete("/api/videos/:s3Key", async (req, res) => {
@@ -458,10 +528,20 @@ app.delete("/api/videos/:s3Key", async (req, res) => {
       Key: `results/${s3Key}.json`,
     });
 
-    // Delete both files in parallel
+    // Delete the snapshot image file
+    const deleteSnapshotCommand = new DeleteObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: `snapshots/${s3Key}.jpg`,
+    });
+
+    // Delete all files in parallel
     await Promise.all([
       s3.send(deleteVideoCommand),
-      s3.send(deleteMetadataCommand)
+      s3.send(deleteMetadataCommand),
+      s3.send(deleteSnapshotCommand).catch(err => {
+        // Snapshot might not exist for older videos, so don't fail if it's missing
+        console.log(`Snapshot not found for ${s3Key}, skipping deletion`);
+      })
     ]);
 
     console.log(`Deleted video and metadata for: ${s3Key}`);

@@ -94,10 +94,16 @@ function createVideoCard(video) {
         ? `<img src="${video.albumImageUrl}" alt="Album Cover" class="video-album-cover">`
         : '<div class="video-album-placeholder">No Cover</div>';
 
+    // Video snapshot (will be loaded asynchronously)
+    const videoSnapshot = video.snapshotKey
+        ? `<img src="" alt="Video Snapshot" class="video-snapshot" data-snapshot-key="${escapeHtml(video.snapshotKey)}" style="display: none;">`
+        : '';
+
     card.innerHTML = `
         <div class="video-card-content">
             <div class="video-album-section">
                 ${albumCover}
+                ${videoSnapshot}
             </div>
             <div class="video-info-section">
                 <h3 class="video-track-name">${escapeHtml(video.trackName)}</h3>
@@ -142,7 +148,30 @@ function createVideoCard(video) {
         await deleteVideo(video.s3Key, card, video.trackName, video.artistName);
     });
 
+    // Load snapshot image if available
+    const snapshotImg = card.querySelector('.video-snapshot');
+    if (snapshotImg && video.snapshotKey) {
+        loadVideoSnapshot(video.s3Key, snapshotImg);
+    }
+
     return card;
+}
+
+async function loadVideoSnapshot(s3Key, imgElement) {
+    try {
+        const response = await fetch(`/api/videos/${encodeURIComponent(s3Key)}/snapshot`);
+        
+        if (!response.ok) {
+            console.warn(`Failed to get snapshot URL: ${response.status}`);
+            return;
+        }
+
+        const data = await response.json();
+        imgElement.src = data.url;
+        imgElement.style.display = 'block';
+    } catch (err) {
+        console.error('Error loading snapshot:', err);
+    }
 }
 
 async function playVideo(s3Key, button) {
