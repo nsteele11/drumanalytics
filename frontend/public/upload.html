@@ -179,6 +179,10 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
             // FETCH FULL METADATA
             const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
             spotifyMetadata = await metaRes.json();
+            
+            // Debug: log the metadata to see what we're receiving
+            console.log('Spotify Metadata:', spotifyMetadata);
+            console.log('Audio Features:', spotifyMetadata.audio_features);
 
             document.getElementById('metadataPreview').style.display = 'block';
             document.getElementById('artistMeta').innerHTML =
@@ -216,7 +220,13 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
             // Display audio features
             const audioFeatures = spotifyMetadata.audio_features;
             const audioFeaturesSection = document.getElementById('audioFeaturesSection');
-            if (audioFeatures) {
+            console.log('Audio features check:', audioFeatures);
+            console.log('Audio features section element:', audioFeaturesSection);
+            
+            if (!audioFeaturesSection) {
+                console.error('Audio features section element not found!');
+            } else if (audioFeatures && typeof audioFeatures === 'object' && Object.keys(audioFeatures).length > 0) {
+                console.log('Displaying audio features:', audioFeatures);
                 audioFeaturesSection.style.display = 'block';
 
                 // Helper function to format 0-1 scores as percentages

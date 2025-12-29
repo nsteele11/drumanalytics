@@ -150,8 +150,10 @@ router.get("/track/:trackId", async (req, res) => {
     let audioFeatures = null;
     if (audioFeaturesRes.ok) {
       audioFeatures = await audioFeaturesRes.json();
+      console.log('Audio features fetched successfully:', audioFeatures);
     } else {
-      console.warn(`Failed to fetch audio features: ${audioFeaturesRes.status}`);
+      const errorText = await audioFeaturesRes.text();
+      console.warn(`Failed to fetch audio features: ${audioFeaturesRes.status}`, errorText);
     }
 
     // Format response to match what frontend expects
