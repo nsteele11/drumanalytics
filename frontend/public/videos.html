@@ -78,17 +78,6 @@ function createVideoCard(video) {
     const card = document.createElement('div');
     card.className = 'video-card';
 
-    // Format date
-    const uploadDate = video.uploadTimestamp 
-        ? new Date(video.uploadTimestamp).toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        })
-        : 'Unknown date';
-
     // Album cover or placeholder
     const albumCover = video.albumImageUrl 
         ? `<img src="${video.albumImageUrl}" alt="Album Cover" class="video-album-cover">`
@@ -133,7 +122,7 @@ function createVideoCard(video) {
                         ${video.metricsUpdatedAt ? `<div class="video-meta-item" style="font-size: 12px; color: #666; font-style: italic;"><strong>As of:</strong> ${formatDate(video.metricsUpdatedAt)}</div>` : ''}
                     </div>
                     
-                    <div class="video-meta-item"><strong>Uploaded:</strong> ${uploadDate}</div>
+                    ${video.postedDate ? `<div class="video-meta-item"><strong>Posted:</strong> ${formatDate(video.postedDate)}</div>` : ''}
                 </div>
 
                 <div class="video-actions">
@@ -343,6 +332,10 @@ function openEditMetricsModal(video, cardElement) {
                     <label>TikTok Likes</label>
                     <input type="number" id="edit-tiktok-likes" value="${video.tiktokLikes || ''}" placeholder="0" min="0">
                 </div>
+                <div class="form-group">
+                    <label>Posted Date</label>
+                    <input type="date" id="edit-posted-date" value="${video.postedDate ? new Date(video.postedDate).toISOString().split('T')[0] : ''}">
+                </div>
                 <div class="form-actions">
                     <button type="button" class="cancel-btn">Cancel</button>
                     <button type="submit" class="save-btn">Save</button>
@@ -371,6 +364,7 @@ function openEditMetricsModal(video, cardElement) {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        const postedDateValue = document.getElementById('edit-posted-date').value;
         const metrics = {
             igHashtags: document.getElementById('edit-ig-hashtags').value.trim() || null,
             tiktokHashtags: document.getElementById('edit-tiktok-hashtags').value.trim() || null,
@@ -378,6 +372,7 @@ function openEditMetricsModal(video, cardElement) {
             igLikes: document.getElementById('edit-ig-likes').value ? parseInt(document.getElementById('edit-ig-likes').value) : null,
             tiktokViews: document.getElementById('edit-tiktok-views').value ? parseInt(document.getElementById('edit-tiktok-views').value) : null,
             tiktokLikes: document.getElementById('edit-tiktok-likes').value ? parseInt(document.getElementById('edit-tiktok-likes').value) : null,
+            postedDate: postedDateValue ? new Date(postedDateValue).toISOString() : null,
         };
         
         try {

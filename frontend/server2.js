@@ -411,6 +411,7 @@ app.get("/api/videos", async (req, res) => {
           igLikes: metadata.igLikes || null,
           tiktokViews: metadata.tiktokViews || null,
           tiktokLikes: metadata.tiktokLikes || null,
+          postedDate: metadata.postedDate || null,
           metricsUpdatedAt: metadata.metricsUpdatedAt || null,
           // Include analysis data if available
           duration: metadata.analysis?.duration || null,
@@ -440,8 +441,12 @@ app.get("/api/videos", async (req, res) => {
       }
     }
 
-    // Sort by upload timestamp (newest first)
-    videos.sort((a, b) => (b.uploadTimestamp || 0) - (a.uploadTimestamp || 0));
+    // Sort by posted date (newest first), fallback to upload timestamp if no posted date
+    videos.sort((a, b) => {
+      const aDate = a.postedDate ? new Date(a.postedDate).getTime() : (a.uploadTimestamp || 0);
+      const bDate = b.postedDate ? new Date(b.postedDate).getTime() : (b.uploadTimestamp || 0);
+      return bDate - aDate;
+    });
 
     res.json(videos);
   } catch (err) {
@@ -519,7 +524,7 @@ app.get("/api/videos/:s3Key/snapshot", async (req, res) => {
 app.put("/api/videos/:s3Key/metrics", async (req, res) => {
   try {
     const { s3Key } = req.params;
-    const { igHashtags, tiktokHashtags, igViews, igLikes, tiktokViews, tiktokLikes } = req.body;
+    const { igHashtags, tiktokHashtags, igViews, igLikes, tiktokViews, tiktokLikes, postedDate } = req.body;
     
     if (!s3Key) {
       return res.status(400).json({ error: "Video key is required" });
@@ -569,6 +574,7 @@ app.put("/api/videos/:s3Key/metrics", async (req, res) => {
     metadata.igLikes = igLikes !== undefined && igLikes !== null ? Number(igLikes) : null;
     metadata.tiktokViews = tiktokViews !== undefined && tiktokViews !== null ? Number(tiktokViews) : null;
     metadata.tiktokLikes = tiktokLikes !== undefined && tiktokLikes !== null ? Number(tiktokLikes) : null;
+    metadata.postedDate = postedDate || null;
     metadata.metricsUpdatedAt = new Date().toISOString();
 
     // Save updated metadata back to S3
@@ -593,6 +599,7 @@ app.put("/api/videos/:s3Key/metrics", async (req, res) => {
         igLikes: metadata.igLikes,
         tiktokViews: metadata.tiktokViews,
         tiktokLikes: metadata.tiktokLikes,
+        postedDate: metadata.postedDate,
         metricsUpdatedAt: metadata.metricsUpdatedAt
       }
     });
