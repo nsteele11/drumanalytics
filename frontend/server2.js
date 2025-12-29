@@ -3,9 +3,11 @@ import multer from "multer";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from "dotenv";
 import fs from "fs";
+import { Readable } from "stream";
 import { analyzeVideo } from "../analysis/analyze_video.js";
 import spotifyRoutes from "./spotifyRoutes.js";
 
@@ -127,6 +129,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
             release_date: spotifyData.track.release_date,
             popularity: spotifyData.track.popularity,
             duration_ms: spotifyData.track.duration_ms,
+            album_image_url: spotifyData.track.album_image_url || null,
           },
           audio_features: spotifyData.audio_features || null,
         }
@@ -216,6 +219,110 @@ app.post("/upload", upload.single("video"), async (req, res) => {
   } catch (err) {
     console.error("Upload or analysis error:", err);
     res.status(500).send("Upload or analysis failed");
+  }
+});
+
+// ----------------------
+// List All Videos Endpoint
+// ----------------------
+app.get("/api/videos", async (req, res) => {
+  try {
+    // List all objects in the S3 bucket
+    const listCommand = new ListObjectsV2Command({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Prefix: "results/", // Only get metadata files
+    });
+
+    const listResponse = await s3.send(listCommand);
+    
+    if (!listResponse.Contents || listResponse.Contents.length === 0) {
+      return res.json([]);
+    }
+
+    // Fetch metadata for each video
+    const videos = [];
+    
+    for (const obj of listResponse.Contents) {
+      // Skip if it's not a JSON file
+      if (!obj.Key.endsWith('.json')) continue;
+      
+      try {
+        // Get the metadata file
+        const getMetadataCommand = new GetObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME,
+          Key: obj.Key,
+        });
+
+        const metadataResponse = await s3.send(getMetadataCommand);
+        const metadataStream = metadataResponse.Body;
+        
+        // Convert stream to string
+        const metadataText = await new Promise((resolve, reject) => {
+          if (metadataStream instanceof Readable) {
+            const chunks = [];
+            metadataStream.on('data', chunk => chunks.push(chunk));
+            metadataStream.on('end', () => resolve(Buffer.concat(chunks).toString()));
+            metadataStream.on('error', reject);
+          } else {
+            // If it's already a buffer or string
+            resolve(metadataStream.toString());
+          }
+        });
+
+        const metadata = JSON.parse(metadataText);
+        
+        // Extract video info
+        const videoInfo = {
+          s3Key: metadata.s3Key,
+          originalFilename: metadata.originalFilename,
+          artistName: metadata.spotify?.artist?.name || 'Unknown Artist',
+          trackName: metadata.spotify?.track?.name || 'Unknown Track',
+          album: metadata.spotify?.track?.album || null,
+          releaseDate: metadata.spotify?.track?.release_date || null,
+          popularity: metadata.spotify?.track?.popularity || null,
+          artistFollowers: metadata.spotify?.artist?.followers || null,
+          genres: metadata.spotify?.artist?.genres || [],
+          albumImageUrl: metadata.spotify?.track?.album_image_url || null,
+          analyzedAt: metadata.analyzedAt || null,
+          uploadTimestamp: metadata.s3Key ? parseInt(metadata.s3Key.split('-')[0]) : null,
+        };
+
+        videos.push(videoInfo);
+      } catch (err) {
+        console.error(`Error processing metadata for ${obj.Key}:`, err);
+        // Continue with next video
+      }
+    }
+
+    // Sort by upload timestamp (newest first)
+    videos.sort((a, b) => (b.uploadTimestamp || 0) - (a.uploadTimestamp || 0));
+
+    res.json(videos);
+  } catch (err) {
+    console.error("Error listing videos:", err);
+    res.status(500).json({ error: "Failed to list videos" });
+  }
+});
+
+// ----------------------
+// Get Video Playback URL Endpoint
+// ----------------------
+app.get("/api/videos/:s3Key/play", async (req, res) => {
+  try {
+    const { s3Key } = req.params;
+    
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: s3Key,
+    });
+
+    // Generate a signed URL that expires in 1 hour
+    const signedUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+    
+    res.json({ url: signedUrl });
+  } catch (err) {
+    console.error("Error generating video URL:", err);
+    res.status(500).json({ error: "Failed to generate video URL" });
   }
 });
 

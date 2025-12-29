@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Videos</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<nav>
+    <a href="index.html">Instagram Insights</a>
+    <a href="upload.html">Video Upload</a>
+    <a href="videos.html" class="active">Videos</a>
+    <a href="audio.html">Audio Analytics</a>
+</nav>
+
+<main>
+    <h1>Videos</h1>
+
+    <div class="section-placeholder">
+        <div id="loading" style="text-align: center; padding: 20px; display: none;">
+            Loading videos...
+        </div>
+        
+        <div id="error" style="display: none; padding: 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; margin-bottom: 20px;">
+        </div>
+
+        <div id="videosContainer" class="videos-container">
+            <!-- Videos will be inserted here -->
+        </div>
+    </div>
+</main>
+
+<script>
+// Fetch and display videos
+async function loadVideos() {
+    const loadingDiv = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+    const videosContainer = document.getElementById('videosContainer');
+
+    loadingDiv.style.display = 'block';
+    errorDiv.style.display = 'none';
+    videosContainer.innerHTML = '';
+
+    try {
+        const response = await fetch('/api/videos');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const videos = await response.json();
+        loadingDiv.style.display = 'none';
+
+        if (videos.length === 0) {
+            videosContainer.innerHTML = '<p style="text-align: center; padding: 40px; color: #666;">No videos uploaded yet.</p>';
+            return;
+        }
+
+        // Display videos
+        videos.forEach(video => {
+            const videoCard = createVideoCard(video);
+            videosContainer.appendChild(videoCard);
+        });
+
+    } catch (err) {
+        loadingDiv.style.display = 'none';
+        errorDiv.style.display = 'block';
+        errorDiv.textContent = `Error loading videos: ${err.message}`;
+        console.error('Error loading videos:', err);
+    }
+}
+
+function createVideoCard(video) {
+    const card = document.createElement('div');
+    card.className = 'video-card';
+
+    // Format date
+    const uploadDate = video.uploadTimestamp 
+        ? new Date(video.uploadTimestamp).toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+        : 'Unknown date';
+
+    // Album cover or placeholder
+    const albumCover = video.albumImageUrl 
+        ? `<img src="${video.albumImageUrl}" alt="Album Cover" class="video-album-cover">`
+        : '<div class="video-album-placeholder">No Cover</div>';
+
+    card.innerHTML = `
+        <div class="video-card-content">
+            <div class="video-album-section">
+                ${albumCover}
+            </div>
+            <div class="video-info-section">
+                <h3 class="video-track-name">${escapeHtml(video.trackName)}</h3>
+                <p class="video-artist-name">${escapeHtml(video.artistName)}</p>
+                
+                <div class="video-metadata">
+                    ${video.album ? `<div class="video-meta-item"><strong>Album:</strong> ${escapeHtml(video.album)}</div>` : ''}
+                    ${video.releaseDate ? `<div class="video-meta-item"><strong>Release Date:</strong> ${escapeHtml(video.releaseDate)}</div>` : ''}
+                    ${video.popularity !== null ? `<div class="video-meta-item"><strong>Popularity:</strong> ${video.popularity}/100</div>` : ''}
+                    ${video.artistFollowers !== null ? `<div class="video-meta-item"><strong>Artist Followers:</strong> ${video.artistFollowers.toLocaleString()}</div>` : ''}
+                    ${video.genres && video.genres.length > 0 ? `<div class="video-meta-item"><strong>Genres:</strong> ${escapeHtml(video.genres.join(', '))}</div>` : ''}
+                    <div class="video-meta-item"><strong>Uploaded:</strong> ${uploadDate}</div>
+                </div>
+
+                <div class="video-actions">
+                    <button class="play-video-btn" data-s3key="${escapeHtml(video.s3Key)}">
+                        ▶ Play Video
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add click handler for play button
+    const playBtn = card.querySelector('.play-video-btn');
+    playBtn.addEventListener('click', async () => {
+        await playVideo(video.s3Key, playBtn);
+    });
+
+    return card;
+}
+
+async function playVideo(s3Key, button) {
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Loading...';
+
+    try {
+        const response = await fetch(`/api/videos/${encodeURIComponent(s3Key)}/play`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to get video URL: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Open video in new window/tab
+        window.open(data.url, '_blank');
+        
+    } catch (err) {
+        alert(`Error loading video: ${err.message}`);
+        console.error('Error playing video:', err);
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Load videos when page loads
+loadVideos();
+</script>
+
+</body>
+</html>
+

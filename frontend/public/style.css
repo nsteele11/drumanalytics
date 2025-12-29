@@ -163,6 +163,116 @@ input[type="file"] {
     font-size: 14px;
 }
 
+/* Videos Page Styles */
+.videos-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.video-card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.video-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.video-card-content {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+}
+
+.video-album-section {
+    flex-shrink: 0;
+}
+
+.video-album-cover {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.video-album-placeholder {
+    width: 120px;
+    height: 120px;
+    background-color: #e0e0e0;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 12px;
+    text-align: center;
+}
+
+.video-info-section {
+    flex: 1;
+    min-width: 0;
+}
+
+.video-track-name {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.video-artist-name {
+    margin: 0 0 15px 0;
+    color: #666;
+    font-size: 16px;
+}
+
+.video-metadata {
+    margin-bottom: 15px;
+}
+
+.video-meta-item {
+    margin: 8px 0;
+    font-size: 14px;
+    color: #555;
+}
+
+.video-meta-item strong {
+    color: #333;
+    margin-right: 5px;
+}
+
+.video-actions {
+    margin-top: 15px;
+}
+
+.play-video-btn {
+    padding: 10px 20px;
+    background-color: #1db954;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.play-video-btn:hover:not(:disabled) {
+    background-color: #1ed760;
+}
+
+.play-video-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
     .upload-container {
         flex-direction: column;
@@ -175,5 +285,20 @@ input[type="file"] {
     
     .audio-features-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .videos-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .video-card-content {
+        flex-direction: column;
+    }
+    
+    .video-album-cover,
+    .video-album-placeholder {
+        width: 100%;
+        max-width: 200px;
+        margin: 0 auto;
     }
 }

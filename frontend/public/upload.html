@@ -12,6 +12,7 @@
 <nav>
     <a href="index.html">Instagram Insights</a>
     <a href="upload.html" class="active">Video Upload</a>
+    <a href="videos.html">Videos</a>
     <a href="audio.html">Audio Analytics</a>
 </nav>
 
@@ -66,6 +67,9 @@
                 <!-- AUDIO FEATURES -->
                 <div id="audioFeaturesSection" class="audio-features-section" style="display:none;">
                     <h4>Audio Features</h4>
+                    <div id="audioFeaturesErrorMsg" class="audio-features-error" style="display:none; padding:10px; background-color:#fff3cd; border:1px solid #ffc107; border-radius:5px; margin-bottom:15px; font-size:13px; color:#856404;">
+                        <strong>Note:</strong> Audio features are currently unavailable. Spotify requires Extended Mode Web API access for audio-features endpoint (as of Nov 2024). Please apply for extended access in your Spotify Developer Dashboard.
+                    </div>
                     <div class="audio-features-grid">
                         <div class="audio-feature">
                             <strong>Danceability:</strong>
@@ -223,7 +227,9 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
             // Display audio features
             const audioFeatures = spotifyMetadata.audio_features;
             const audioFeaturesSection = document.getElementById('audioFeaturesSection');
+            const audioFeaturesError = spotifyMetadata.audio_features_error;
             console.log('Audio features check:', audioFeatures);
+            console.log('Audio features error:', audioFeaturesError);
             console.log('Audio features section element:', audioFeaturesSection);
             
             if (!audioFeaturesSection) {
@@ -231,6 +237,11 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
             } else if (audioFeatures && typeof audioFeatures === 'object' && Object.keys(audioFeatures).length > 0) {
                 console.log('Displaying audio features:', audioFeatures);
                 audioFeaturesSection.style.display = 'block';
+                // Hide error message if features are available
+                const errorMsgElement = document.getElementById('audioFeaturesErrorMsg');
+                const gridElement = audioFeaturesSection.querySelector('.audio-features-grid');
+                if (errorMsgElement) errorMsgElement.style.display = 'none';
+                if (gridElement) gridElement.style.display = 'grid';
 
                 // Helper function to format 0-1 scores as percentages
                 const formatScore = (value) => {
@@ -263,7 +274,17 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
                 document.getElementById('audioValence').textContent = formatScore(audioFeatures.valence);
                 document.getElementById('audioTimeSignature').textContent = audioFeatures.time_signature !== null && audioFeatures.time_signature !== undefined ? audioFeatures.time_signature : '-';
             } else {
-                audioFeaturesSection.style.display = 'none';
+                // Show error message if audio features aren't available
+                const errorMsgElement = document.getElementById('audioFeaturesErrorMsg');
+                if (audioFeaturesError && errorMsgElement) {
+                    audioFeaturesSection.style.display = 'block';
+                    errorMsgElement.style.display = 'block';
+                        // Hide the grid if features aren't available
+                    const gridElement = audioFeaturesSection.querySelector('.audio-features-grid');
+                    if (gridElement) gridElement.style.display = 'none';
+                } else {
+                    audioFeaturesSection.style.display = 'none';
+                }
             }
         };
         trackResults.appendChild(li);

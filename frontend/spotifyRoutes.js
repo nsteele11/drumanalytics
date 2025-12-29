@@ -172,18 +172,23 @@ router.get("/track/:trackId", async (req, res) => {
           audioFeaturesErrorMsg = errorMsg;
         }
       } else {
-        // Try to get error details
+        // Get error details - read response as text first, then try to parse as JSON
+        const errorText = await audioFeaturesRes.text();
+        let errorMsg = `HTTP ${audioFeaturesRes.status} ${audioFeaturesRes.statusText}`;
+        
         try {
-          const errorData = await audioFeaturesRes.json();
-          const errorMsg = `HTTP ${audioFeaturesRes.status}: ${errorData.error?.message || JSON.stringify(errorData)}`;
-          console.error(`Failed to fetch audio features for track ${trackId}:`, errorMsg);
-          audioFeaturesErrorMsg = errorMsg;
+          const errorData = JSON.parse(errorText);
+          if (errorData.error) {
+            errorMsg = `HTTP ${audioFeaturesRes.status}: ${errorData.error.message || errorData.error.status || JSON.stringify(errorData.error)}`;
+          } else {
+            errorMsg = `HTTP ${audioFeaturesRes.status}: ${errorText}`;
+          }
         } catch (parseError) {
-          const errorText = await audioFeaturesRes.text();
-          const errorMsg = `HTTP ${audioFeaturesRes.status} ${audioFeaturesRes.statusText}: ${errorText}`;
-          console.error(`Failed to fetch audio features for track ${trackId}:`, errorMsg);
-          audioFeaturesErrorMsg = errorMsg;
+          errorMsg = `HTTP ${audioFeaturesRes.status}: ${errorText || audioFeaturesRes.statusText}`;
         }
+        
+        console.error(`Failed to fetch audio features for track ${trackId}:`, errorMsg);
+        audioFeaturesErrorMsg = errorMsg;
       }
     } catch (audioFeaturesError) {
       const errorMsg = `Exception: ${audioFeaturesError.message}`;
