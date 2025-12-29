@@ -218,36 +218,70 @@ artistSearchInput.addEventListener('input', async (e) => {
     artists.forEach(a => {
         const li = document.createElement('li');
         li.textContent = `${a.name} (${a.followers} followers)`;
-        li.onclick = () => {
+        li.onclick = async () => {
             selectedArtistId = a.spotify_artist_id;
             artistSearchInput.value = a.name;
             artistResults.innerHTML = '';
             trackSearchInput.disabled = false;
             trackSearchInput.required = true;
+            
+            // Load all tracks for this artist when artist is selected
+            await loadTracksForArtist(selectedArtistId);
         };
         artistResults.appendChild(li);
     });
 });
 
-/* -----------------------------
-   TRACK SEARCH
---------------------------------*/
-trackSearchInput.addEventListener('input', async (e) => {
-    const query = e.target.value;
-    trackResults.innerHTML = '';
-    if (!query) return;
+// Store all tracks for the selected artist
+let allArtistTracks = [];
 
-    // If Original type is selected, don't search Spotify
+/* -----------------------------
+   LOAD TRACKS FOR ARTIST
+--------------------------------*/
+async function loadTracksForArtist(artistId) {
+    if (!artistId) return;
+    
+    // If Original type is selected, don't load Spotify tracks
     if (videoTypeSelect.value === 'Original') {
         return;
     }
 
-    if (!selectedArtistId) return;
+    try {
+        // Load all tracks (no query filter) to populate the dropdown
+        const res = await fetch(`/api/spotify/search/tracks?artistId=${artistId}&q=`);
+        allArtistTracks = await res.json();
+        
+        // Update the dropdown with all tracks
+        updateTrackDropdown(allArtistTracks);
+    } catch (err) {
+        console.error('Error loading tracks:', err);
+        allArtistTracks = [];
+    }
+}
 
-    const res = await fetch(`/api/spotify/search/tracks?artistId=${selectedArtistId}&q=${encodeURIComponent(query)}`);
-    const tracks = await res.json();
-
-    tracks.forEach(t => {
+/* -----------------------------
+   UPDATE TRACK DROPDOWN
+--------------------------------*/
+function updateTrackDropdown(tracks, filterQuery = '') {
+    trackResults.innerHTML = '';
+    
+    // Filter tracks if query provided
+    const filteredTracks = filterQuery 
+        ? tracks.filter(t => t.name.toLowerCase().includes(filterQuery.toLowerCase()))
+        : tracks;
+    
+    // Limit display to first 100 to avoid overwhelming the UI
+    const displayTracks = filteredTracks.slice(0, 100);
+    
+    if (displayTracks.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No tracks found';
+        li.style.color = '#999';
+        trackResults.appendChild(li);
+        return;
+    }
+    
+    displayTracks.forEach(t => {
         const li = document.createElement('li');
         li.textContent = t.name;
         li.onclick = async () => {
@@ -364,6 +398,34 @@ trackSearchInput.addEventListener('input', async (e) => {
         };
         trackResults.appendChild(li);
     });
+}
+
+/* -----------------------------
+   TRACK SEARCH (FILTER EXISTING TRACKS)
+--------------------------------*/
+trackSearchInput.addEventListener('input', async (e) => {
+    const query = e.target.value;
+    
+    // If Original type is selected, don't search Spotify
+    if (videoTypeSelect.value === 'Original') {
+        return;
+    }
+
+    if (!selectedArtistId) return;
+
+    // If we have tracks loaded, filter them client-side
+    if (allArtistTracks.length > 0) {
+        updateTrackDropdown(allArtistTracks, query);
+    } else {
+        // Otherwise, fetch from server (shouldn't happen, but fallback)
+        trackResults.innerHTML = '';
+        if (!query) return;
+
+        const res = await fetch(`/api/spotify/search/tracks?artistId=${selectedArtistId}&q=${encodeURIComponent(query)}`);
+        const tracks = await res.json();
+        allArtistTracks = tracks; // Store for future filtering
+        updateTrackDropdown(tracks, query);
+    }
 });
 
 /* -----------------------------

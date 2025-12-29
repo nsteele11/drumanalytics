@@ -48,7 +48,8 @@ router.get("/search/artists", async (req, res) => {
 
 /**
  * GET /api/spotify/search/tracks?artistId=xxx&q=songName
- * Returns top tracks for a given artist filtered by query
+ * Returns tracks for a given artist filtered by query
+ * Uses pagination to get up to 200 tracks (not just top 10)
  */
 router.get("/search/tracks", async (req, res) => {
   const artistId = req.query.artistId;
@@ -61,9 +62,9 @@ router.get("/search/tracks", async (req, res) => {
   try {
     const token = await getSpotifyToken();
 
-    // Spotify API: get artist's top tracks (US market)
-    const spotifyRes = await fetch(
-      `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=US`,
+    // First, get the artist name to search for tracks
+    const artistRes = await fetch(
+      `https://api.spotify.com/v1/artists/${artistId}`,
       {
         headers: {
           Authorization: `Bearer ${token}`
@@ -71,17 +72,77 @@ router.get("/search/tracks", async (req, res) => {
       }
     );
 
-    const data = await spotifyRes.json();
+    if (!artistRes.ok) {
+      throw new Error(`Failed to get artist: ${artistRes.status}`);
+    }
 
-    // Filter tracks by the search query (case-insensitive)
-    const filteredTracks = data.tracks
-      .filter(track => track.name.toLowerCase().includes(query.toLowerCase()))
-      .map(track => ({
-        id: track.id,
-        name: track.name,
-        album: track.album.name,
-        preview_url: track.preview_url
-      }));
+    const artistData = await artistRes.json();
+    const artistName = artistData.name;
+
+    // Search for tracks by this artist using search API with pagination
+    // Use pagination to get more results (up to 200 tracks)
+    let allTracks = [];
+    let offset = 0;
+    const limit = 50; // Max per request
+    const maxTracks = 200; // Limit total to avoid too many API calls
+
+    while (offset < maxTracks) {
+      const searchRes = await fetch(
+        `https://api.spotify.com/v1/search?q=artist:"${encodeURIComponent(artistName)}"&type=track&limit=${limit}&offset=${offset}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!searchRes.ok) {
+        console.warn(`Failed to fetch tracks at offset ${offset}: ${searchRes.status}`);
+        break;
+      }
+
+      const searchData = await searchRes.json();
+      const tracks = searchData.tracks.items;
+
+      if (tracks.length === 0) {
+        break;
+      }
+
+      // Filter to only tracks where this artist is the primary artist
+      const artistTracks = tracks
+        .filter(track => track.artists.some(artist => artist.id === artistId))
+        .map(track => ({
+          id: track.id,
+          name: track.name,
+          album: track.album.name,
+          preview_url: track.preview_url
+        }));
+
+      allTracks = [...allTracks, ...artistTracks];
+
+      // If we got fewer than limit, we've reached the end
+      if (tracks.length < limit) {
+        break;
+      }
+
+      offset += limit;
+    }
+
+    // Remove duplicates (same track ID)
+    const uniqueTracks = Array.from(
+      new Map(allTracks.map(track => [track.id, track])).values()
+    );
+
+    // Filter tracks by the search query (case-insensitive) if provided
+    let filteredTracks = uniqueTracks;
+    if (query) {
+      filteredTracks = uniqueTracks.filter(track => 
+        track.name.toLowerCase().includes(query.toLowerCase())
+      );
+    }
+
+    // Sort by track name for easier browsing
+    filteredTracks.sort((a, b) => a.name.localeCompare(b.name));
 
     res.json(filteredTracks);
   } catch (err) {
