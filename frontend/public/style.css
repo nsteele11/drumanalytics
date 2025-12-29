@@ -78,6 +78,28 @@ input[type="file"] {
     min-width: 0;
 }
 
+.upload-form select {
+    width: 100%;
+    max-width: 400px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    font-family: 'Roboto', sans-serif;
+    background-color: #fff;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.upload-form select:focus {
+    outline: none;
+    border-color: #1db954;
+}
+
+.upload-form select:required:invalid {
+    border-color: #dc3545;
+}
+
 .additional-metadata {
     flex: 0 0 300px;
     padding: 20px;

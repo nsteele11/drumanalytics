@@ -3,7 +3,7 @@ import multer from "multer";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from "dotenv";
 import fs from "fs";
@@ -94,10 +94,22 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     }
 
     const file = req.file;
-    const { artistId, trackId, spotifyMetadata } = req.body;
+    const { artistId, trackId, artistName, trackName, videoType, spotifyMetadata } = req.body;
 
-    if (!artistId || !trackId) {
-      return res.status(400).send("Artist and track must be selected");
+    if (!videoType) {
+      return res.status(400).send("Video type must be selected");
+    }
+
+    // For Original type, require artistName and trackName
+    if (videoType === 'Original') {
+      if (!artistName || !trackName) {
+        return res.status(400).send("Artist and track names are required for Original type");
+      }
+    } else {
+      // For other types, require Spotify artistId and trackId
+      if (!artistId || !trackId) {
+        return res.status(400).send("Artist and track must be selected from Spotify");
+      }
     }
 
     // ----------------------
@@ -194,12 +206,23 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     const jsonData = {
       s3Key,
       originalFilename: file.originalname,
-      artistId,
-      trackId,
-      spotify: spotifyDataForStorage,
+      videoType,
       analysis,
       analyzedAt: new Date().toISOString(),
     };
+
+    // Add artist and track information based on type
+    if (videoType === 'Original') {
+      // For Original type, store free text names
+      jsonData.artistName = artistName;
+      jsonData.trackName = trackName;
+      jsonData.spotify = null; // No Spotify data for Original
+    } else {
+      // For other types, store Spotify IDs and metadata
+      jsonData.artistId = artistId;
+      jsonData.trackId = trackId;
+      jsonData.spotify = spotifyDataForStorage;
+    }
 
     fs.writeFileSync(localJsonPath, JSON.stringify(jsonData, null, 2));
 
@@ -281,6 +304,24 @@ app.get("/api/videos", async (req, res) => {
       if (!obj.Key || !obj.Key.endsWith('.json')) continue;
       
       try {
+        // Extract s3Key from metadata filename (results/{s3Key}.json)
+        const s3Key = obj.Key.replace('results/', '').replace('.json', '');
+        
+        // Verify that the video file exists before including it
+        const headVideoCommand = new HeadObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME,
+          Key: s3Key,
+        });
+
+        try {
+          await s3.send(headVideoCommand);
+          // Video file exists, proceed to get metadata
+        } catch (headErr) {
+          // Video file doesn't exist, skip this entry
+          console.log(`Skipping ${obj.Key} - video file ${s3Key} does not exist`);
+          continue;
+        }
+
         // Get the metadata file
         const getMetadataCommand = new GetObjectCommand({
           Bucket: process.env.S3_BUCKET_NAME,
@@ -306,12 +347,13 @@ app.get("/api/videos", async (req, res) => {
 
         const metadata = JSON.parse(metadataText);
         
-        // Extract video info
+        // Extract video info - handle both Original type (free text) and Spotify-linked videos
         const videoInfo = {
-          s3Key: metadata.s3Key,
+          s3Key: metadata.s3Key || s3Key,
           originalFilename: metadata.originalFilename,
-          artistName: metadata.spotify?.artist?.name || 'Unknown Artist',
-          trackName: metadata.spotify?.track?.name || 'Unknown Track',
+          videoType: metadata.videoType || null,
+          artistName: metadata.artistName || metadata.spotify?.artist?.name || 'Unknown Artist',
+          trackName: metadata.trackName || metadata.spotify?.track?.name || 'Unknown Track',
           album: metadata.spotify?.track?.album || null,
           releaseDate: metadata.spotify?.track?.release_date || null,
           popularity: metadata.spotify?.track?.popularity || null,

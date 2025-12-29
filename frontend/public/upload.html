@@ -34,6 +34,17 @@
                 <input type="text" id="track-search" placeholder="Select track" autocomplete="off" disabled>
                 <ul id="track-results"></ul><br>
 
+                <!-- TYPE -->
+                <label>Type <span style="color: red;">*</span></label><br>
+                <select id="videoType" required>
+                    <option value="">-- Select Type --</option>
+                    <option value="Solo Mix">Solo Mix</option>
+                    <option value="Collab">Collab</option>
+                    <option value="Live">Live</option>
+                    <option value="Original">Original</option>
+                    <option value="Other">Other</option>
+                </select><br><br>
+
                 <!-- METADATA PREVIEW -->
                 <div id="metadataPreview" style="display:none; margin:15px 0; padding:10px; border:1px solid #ccc;">
                     <h3>Spotify Metadata</h3>
@@ -137,14 +148,66 @@ let spotifyMetadata = null;
 const artistResults = document.getElementById('artist-results');
 const trackResults = document.getElementById('track-results');
 const statusDiv = document.getElementById('uploadStatus');
+const artistSearchInput = document.getElementById('artist-search');
+const trackSearchInput = document.getElementById('track-search');
+const videoTypeSelect = document.getElementById('videoType');
+
+/* -----------------------------
+   TYPE SELECTION HANDLER
+--------------------------------*/
+videoTypeSelect.addEventListener('change', (e) => {
+    const selectedType = e.target.value;
+    
+    if (selectedType === 'Original') {
+        // Enable free text input for Original type
+        artistSearchInput.disabled = false;
+        artistSearchInput.placeholder = 'Enter artist name';
+        trackSearchInput.disabled = false;
+        trackSearchInput.placeholder = 'Enter track name';
+        
+        // Clear Spotify search results
+        artistResults.innerHTML = '';
+        trackResults.innerHTML = '';
+        
+        // Clear selected Spotify data
+        selectedArtistId = null;
+        selectedTrackId = null;
+        spotifyMetadata = null;
+        
+        // Hide metadata preview
+        document.getElementById('metadataPreview').style.display = 'none';
+        document.getElementById('additionalMetadata').style.display = 'none';
+    } else {
+        // Restore normal Spotify search behavior
+        artistSearchInput.disabled = false;
+        artistSearchInput.placeholder = 'Type artist name';
+        trackSearchInput.disabled = true;
+        trackSearchInput.placeholder = 'Select track';
+        
+        // Clear any existing selections
+        if (!selectedArtistId) {
+            trackSearchInput.value = '';
+            trackSearchInput.disabled = true;
+        }
+        
+        // Clear results
+        artistResults.innerHTML = '';
+        trackResults.innerHTML = '';
+    }
+});
 
 /* -----------------------------
    ARTIST SEARCH
 --------------------------------*/
-document.getElementById('artist-search').addEventListener('input', async (e) => {
+artistSearchInput.addEventListener('input', async (e) => {
     const query = e.target.value;
     artistResults.innerHTML = '';
     if (!query) return;
+
+    // If Original type is selected, don't search Spotify
+    if (videoTypeSelect.value === 'Original') {
+        return;
+    }
 
     const res = await fetch(`/api/spotify/search/artists?q=${encodeURIComponent(query)}`);
     const artists = await res.json();
@@ -154,9 +217,9 @@ document.getElementById('artist-search').addEventListener('input', async (e) => 
         li.textContent = `${a.name} (${a.followers} followers)`;
         li.onclick = () => {
             selectedArtistId = a.spotify_artist_id;
-            document.getElementById('artist-search').value = a.name;
+            artistSearchInput.value = a.name;
             artistResults.innerHTML = '';
-            document.getElementById('track-search').disabled = false;
+            trackSearchInput.disabled = false;
         };
         artistResults.appendChild(li);
     });
@@ -165,10 +228,17 @@ document.getElementById('artist-search').addEventListener('input', async (e) => 
 /* -----------------------------
    TRACK SEARCH
 --------------------------------*/
-document.getElementById('track-search').addEventListener('input', async (e) => {
+trackSearchInput.addEventListener('input', async (e) => {
     const query = e.target.value;
     trackResults.innerHTML = '';
-    if (!query || !selectedArtistId) return;
+    if (!query) return;
+
+    // If Original type is selected, don't search Spotify
+    if (videoTypeSelect.value === 'Original') {
+        return;
+    }
+
+    if (!selectedArtistId) return;
 
     const res = await fetch(`/api/spotify/search/tracks?artistId=${selectedArtistId}&q=${encodeURIComponent(query)}`);
     const tracks = await res.json();
@@ -178,7 +248,7 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
         li.textContent = t.name;
         li.onclick = async () => {
             selectedTrackId = t.id;
-            document.getElementById('track-search').value = t.name;
+            trackSearchInput.value = t.name;
             trackResults.innerHTML = '';
 
             // FETCH FULL METADATA
@@ -298,9 +368,33 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
 document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    if (!spotifyMetadata || !selectedArtistId || !selectedTrackId) {
-        alert("Please select artist and track");
+    const videoType = videoTypeSelect.value;
+    if (!videoType) {
+        alert("Please select a video type");
         return;
+    }
+
+    const artistName = artistSearchInput.value.trim();
+    const trackName = trackSearchInput.value.trim();
+
+    if (!artistName || !trackName) {
+        alert("Please enter artist and track information");
+        return;
+    }
+
+    // For Original type, we don't need Spotify metadata
+    if (videoType === 'Original') {
+        // Validate that artist and track names are provided
+        if (!artistName || !trackName) {
+            alert("Please enter both artist and track names");
+            return;
+        }
+    } else {
+        // For other types, require Spotify metadata
+        if (!spotifyMetadata || !selectedArtistId || !selectedTrackId) {
+            alert("Please select artist and track from Spotify");
+            return;
+        }
     }
 
     const file = document.getElementById('videoFile').files[0];
@@ -311,9 +405,16 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
 
     const fd = new FormData();
     fd.append('video', file);
-    fd.append('artistId', selectedArtistId);
-    fd.append('trackId', selectedTrackId);
-    fd.append('spotifyMetadata', JSON.stringify(spotifyMetadata));
+    fd.append('videoType', videoType);
+    fd.append('artistName', artistName);
+    fd.append('trackName', trackName);
+    
+    // Only include Spotify data if not Original type
+    if (videoType !== 'Original') {
+        fd.append('artistId', selectedArtistId);
+        fd.append('trackId', selectedTrackId);
+        fd.append('spotifyMetadata', JSON.stringify(spotifyMetadata));
+    }
 
     statusDiv.innerHTML = "Uploading...";
 
@@ -336,6 +437,19 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         selectedTrackId = null;
         document.getElementById('metadataPreview').style.display = 'none';
         document.getElementById('additionalMetadata').style.display = 'none';
+        
+        // Reset field states based on type
+        const currentType = videoTypeSelect.value;
+        if (currentType === 'Original') {
+            artistSearchInput.disabled = false;
+            artistSearchInput.placeholder = 'Enter artist name';
+            trackSearchInput.disabled = false;
+            trackSearchInput.placeholder = 'Enter track name';
+        } else {
+            artistSearchInput.placeholder = 'Type artist name';
+            trackSearchInput.disabled = true;
+            trackSearchInput.placeholder = 'Select track';
+        }
         
     } catch (err) {
         console.error('Upload error:', err);
