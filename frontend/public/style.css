@@ -4,6 +4,7 @@ body {
     margin: 0;
     padding: 0;
     background-color: #f9f9f9;
+    overflow-x: hidden; /* Prevent horizontal scroll on body */
 }
 
 /* Navigation Bar Styles */
@@ -14,6 +15,8 @@ nav {
     gap: 20px;                             /* Space between links */
     align-items: center;                   /* Vertical alignment */
     box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* Soft shadow for depth */
+    position: relative;
+    z-index: 100;
 }
 
 nav a {
@@ -23,6 +26,8 @@ nav a {
     padding: 8px 12px;                      /* Padding inside link */
     border-radius: 5px;                     /* Rounded corners */
     transition: background-color 0.2s, color 0.2s; /* Smooth hover effect */
+    white-space: nowrap;                    /* Prevent text wrapping */
+    flex-shrink: 0;                         /* Prevent links from shrinking */
 }
 
 nav a:hover {
@@ -508,6 +513,40 @@ input[type="file"] {
 }
 
 @media (max-width: 768px) {
+    /* Mobile Navigation - Horizontal Scrollable */
+    nav {
+        padding: 12px 15px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        scrollbar-width: thin; /* Firefox */
+        scrollbar-color: #666 #333; /* Firefox */
+        touch-action: pan-x; /* Allow horizontal panning only */
+    }
+    
+    /* Hide scrollbar on mobile but keep functionality */
+    nav::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    nav::-webkit-scrollbar-track {
+        background: #333;
+    }
+    
+    nav::-webkit-scrollbar-thumb {
+        background: #666;
+        border-radius: 2px;
+    }
+    
+    nav::-webkit-scrollbar-thumb:hover {
+        background: #888;
+    }
+    
+    nav a {
+        padding: 8px 10px;
+        font-size: 14px;
+    }
+    
     .upload-container {
         flex-direction: column;
     }
