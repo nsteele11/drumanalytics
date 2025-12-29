@@ -1,16 +1,19 @@
 import { exec } from "child_process";
 import fs from "fs";
+import path from "path";
+import { detectAudioFeatures } from "./detect_bpm.js";
 
-export function analyzeVideo(localPath) {
-  return new Promise((resolve, reject) => {
-    // Check if file exists
-    if (!fs.existsSync(localPath)) {
-      reject(new Error(`Video file not found: ${localPath}`));
-      return;
-    }
+export async function analyzeVideo(localPath) {
+  // Check if file exists
+  if (!fs.existsSync(localPath)) {
+    throw new Error(`Video file not found: ${localPath}`);
+  }
 
-    const cmd = `ffprobe -v quiet -print_format json -show_format -show_streams "${localPath}"`;
-    const TIMEOUT_MS = 60000; // 60 second timeout
+  const cmd = `ffprobe -v quiet -print_format json -show_format -show_streams "${localPath}"`;
+  const TIMEOUT_MS = 60000; // 60 second timeout
+
+  // First, get basic video info using ffprobe
+  const basicAnalysis = await new Promise((resolve, reject) => {
 
     const childProcess = exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
@@ -60,7 +63,8 @@ export function analyzeVideo(localPath) {
                 sample_rate: audioStream.sample_rate,
                 channels: audioStream.channels
               }
-            : null
+            : null,
+          hasAudio: !!audioStream
         });
       } catch (parseError) {
         reject(new Error(`Failed to parse FFprobe output: ${parseError.message}`));
@@ -77,4 +81,27 @@ export function analyzeVideo(localPath) {
       clearTimeout(timeout);
     });
   });
+
+  // Detect audio features if audio stream exists
+  let audioFeatures = null;
+  if (basicAnalysis.hasAudio) {
+    try {
+      const tempDir = path.dirname(localPath);
+      audioFeatures = await detectAudioFeatures(localPath, tempDir);
+      console.log(`Detected audio features:`, audioFeatures);
+    } catch (audioError) {
+      console.warn("Audio feature detection failed:", audioError.message);
+      // Continue without audio features - don't fail the entire analysis
+    }
+  }
+
+  // Remove hasAudio from result (it was just for internal use)
+  delete basicAnalysis.hasAudio;
+
+  return {
+    ...basicAnalysis,
+    ...(audioFeatures || {}), // Spread audio features into the result
+    // Keep bpm at top level for backwards compatibility
+    bpm: audioFeatures?.bpm || null
+  };
 }

@@ -177,6 +177,9 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     try {
       analysis = await analyzeVideo(file.path);
       console.log("Analysis result:", analysis);
+      if (analysis.bpm) {
+        console.log(`BPM detected: ${analysis.bpm}`);
+      }
     } catch (analysisError) {
       console.error("Video analysis error:", analysisError);
       // Clean up uploaded file from S3 if analysis fails
@@ -362,6 +365,21 @@ app.get("/api/videos", async (req, res) => {
           albumImageUrl: metadata.spotify?.track?.album_image_url || null,
           analyzedAt: metadata.analyzedAt || null,
           uploadTimestamp: metadata.s3Key ? parseInt(metadata.s3Key.split('-')[0]) : null,
+          // Include analysis data if available
+          duration: metadata.analysis?.duration || null,
+          size_mb: metadata.analysis?.size_mb || null,
+          resolution: metadata.analysis?.video ? `${metadata.analysis.video.width}x${metadata.analysis.video.height}` : null,
+          videoCodec: metadata.analysis?.video?.codec || null,
+          fps: metadata.analysis?.video?.fps || null,
+          audioCodec: metadata.analysis?.audio?.codec || null,
+          sampleRate: metadata.analysis?.audio?.sample_rate || null,
+          bpm: metadata.analysis?.bpm || null,
+          pitch: metadata.analysis?.pitch || null,
+          pitchConfidence: metadata.analysis?.pitchConfidence || null,
+          onsets: metadata.analysis?.onsets || null,
+          onsetRate: metadata.analysis?.onsetRate || null,
+          energy: metadata.analysis?.energy || null,
+          silenceRatio: metadata.analysis?.silenceRatio || null,
         };
 
         videos.push(videoInfo);

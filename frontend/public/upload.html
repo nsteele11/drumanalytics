@@ -25,13 +25,13 @@
             <form id="uploadForm" class="upload-form">
 
                 <!-- ARTIST SEARCH -->
-                <label>Artist</label><br>
-                <input type="text" id="artist-search" placeholder="Type artist name" autocomplete="off">
+                <label>Artist <span style="color: red;">*</span></label><br>
+                <input type="text" id="artist-search" placeholder="Type artist name" autocomplete="off" required>
                 <ul id="artist-results"></ul><br>
 
                 <!-- TRACK SEARCH -->
-                <label>Track</label><br>
-                <input type="text" id="track-search" placeholder="Select track" autocomplete="off" disabled>
+                <label>Track <span style="color: red;">*</span></label><br>
+                <input type="text" id="track-search" placeholder="Select track" autocomplete="off" disabled required>
                 <ul id="track-results"></ul><br>
 
                 <!-- TYPE -->
@@ -162,8 +162,10 @@ videoTypeSelect.addEventListener('change', (e) => {
         // Enable free text input for Original type
         artistSearchInput.disabled = false;
         artistSearchInput.placeholder = 'Enter artist name';
+        artistSearchInput.required = true;
         trackSearchInput.disabled = false;
         trackSearchInput.placeholder = 'Enter track name';
+        trackSearchInput.required = true;
         
         // Clear Spotify search results
         artistResults.innerHTML = '';
@@ -181,8 +183,9 @@ videoTypeSelect.addEventListener('change', (e) => {
         // Restore normal Spotify search behavior
         artistSearchInput.disabled = false;
         artistSearchInput.placeholder = 'Type artist name';
-        trackSearchInput.disabled = true;
+        artistSearchInput.required = true;
         trackSearchInput.placeholder = 'Select track';
+        trackSearchInput.required = true;
         
         // Clear any existing selections
         if (!selectedArtistId) {
@@ -220,6 +223,7 @@ artistSearchInput.addEventListener('input', async (e) => {
             artistSearchInput.value = a.name;
             artistResults.innerHTML = '';
             trackSearchInput.disabled = false;
+            trackSearchInput.required = true;
         };
         artistResults.appendChild(li);
     });
@@ -377,18 +381,22 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     const artistName = artistSearchInput.value.trim();
     const trackName = trackSearchInput.value.trim();
 
-    if (!artistName || !trackName) {
-        alert("Please enter artist and track information");
+    // Validate required fields
+    if (!artistName) {
+        alert("Please enter an artist name");
+        artistSearchInput.focus();
+        return;
+    }
+
+    if (!trackName) {
+        alert("Please enter a track name");
+        trackSearchInput.focus();
         return;
     }
 
     // For Original type, we don't need Spotify metadata
     if (videoType === 'Original') {
-        // Validate that artist and track names are provided
-        if (!artistName || !trackName) {
-            alert("Please enter both artist and track names");
-            return;
-        }
+        // Free text is already validated above
     } else {
         // For other types, require Spotify metadata
         if (!spotifyMetadata || !selectedArtistId || !selectedTrackId) {
@@ -443,12 +451,16 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         if (currentType === 'Original') {
             artistSearchInput.disabled = false;
             artistSearchInput.placeholder = 'Enter artist name';
+            artistSearchInput.required = true;
             trackSearchInput.disabled = false;
             trackSearchInput.placeholder = 'Enter track name';
+            trackSearchInput.required = true;
         } else {
             artistSearchInput.placeholder = 'Type artist name';
+            artistSearchInput.required = true;
             trackSearchInput.disabled = true;
             trackSearchInput.placeholder = 'Select track';
+            trackSearchInput.required = true;
         }
         
     } catch (err) {

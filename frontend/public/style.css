@@ -78,6 +78,7 @@ input[type="file"] {
     min-width: 0;
 }
 
+.upload-form input[type="text"],
 .upload-form select {
     width: 100%;
     max-width: 400px;
@@ -87,17 +88,33 @@ input[type="file"] {
     font-size: 14px;
     font-family: 'Roboto', sans-serif;
     background-color: #fff;
-    cursor: pointer;
     transition: border-color 0.2s;
+    box-sizing: border-box;
 }
 
+.upload-form input[type="text"]:focus,
 .upload-form select:focus {
     outline: none;
     border-color: #1db954;
 }
 
+.upload-form input[type="text"]:required:invalid,
 .upload-form select:required:invalid {
     border-color: #dc3545;
+}
+
+.upload-form input[type="text"]:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+}
+
+.upload-form select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 35px;
 }
 
 .additional-metadata {
