@@ -244,4 +244,108 @@ router.get("/track/:trackId", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/spotify/genre/artists?genre=hip%20hop
+ * Returns top 40 artists by followers for a given genre
+ */
+router.get("/genre/artists", async (req, res) => {
+  const genre = req.query.genre;
+
+  if (!genre) {
+    return res.status(400).json({ error: "genre parameter is required" });
+  }
+
+  try {
+    const token = await getSpotifyToken();
+
+    // Search for artists with the genre filter
+    // Spotify search supports genre:"genre name" syntax
+    const spotifyRes = await fetch(
+      `https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(genre)}"&type=artist&limit=50`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!spotifyRes.ok) {
+      throw new Error(`Spotify API error: ${spotifyRes.status}`);
+    }
+
+    const data = await spotifyRes.json();
+
+    // Map and sort by followers (descending)
+    const results = data.artists.items
+      .map(artist => ({
+        id: artist.id,
+        name: artist.name,
+        followers: artist.followers.total,
+        popularity: artist.popularity,
+        genres: artist.genres,
+        image: artist.images[0]?.url
+      }))
+      .sort((a, b) => b.followers - a.followers)
+      .slice(0, 40); // Top 40
+
+    res.json(results);
+  } catch (err) {
+    console.error("Spotify genre artists search error:", err);
+    res.status(500).json({ error: "Failed to fetch artists by genre from Spotify" });
+  }
+});
+
+/**
+ * GET /api/spotify/genre/tracks?genre=hip%20hop
+ * Returns top 40 tracks by popularity for a given genre
+ */
+router.get("/genre/tracks", async (req, res) => {
+  const genre = req.query.genre;
+
+  if (!genre) {
+    return res.status(400).json({ error: "genre parameter is required" });
+  }
+
+  try {
+    const token = await getSpotifyToken();
+
+    // Search for tracks with the genre filter
+    const spotifyRes = await fetch(
+      `https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(genre)}"&type=track&limit=50`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!spotifyRes.ok) {
+      throw new Error(`Spotify API error: ${spotifyRes.status}`);
+    }
+
+    const data = await spotifyRes.json();
+
+    // Map and sort by popularity (descending)
+    const results = data.tracks.items
+      .map(track => ({
+        id: track.id,
+        name: track.name,
+        artist: track.artists[0]?.name || 'Unknown',
+        artistId: track.artists[0]?.id,
+        popularity: track.popularity,
+        album: track.album.name,
+        albumImageUrl: track.album.images[0]?.url || null,
+        releaseDate: track.album.release_date,
+        durationMs: track.duration_ms
+      }))
+      .sort((a, b) => b.popularity - a.popularity)
+      .slice(0, 40); // Top 40
+
+    res.json(results);
+  } catch (err) {
+    console.error("Spotify genre tracks search error:", err);
+    res.status(500).json({ error: "Failed to fetch tracks by genre from Spotify" });
+  }
+});
+
 export default router;

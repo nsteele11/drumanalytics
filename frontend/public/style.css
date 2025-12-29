@@ -486,3 +486,83 @@ input[type="file"] {
         max-width: 100%;
     }
 }
+
+/* Genre Analysis Section */
+.genre-section {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 2px solid #e0e0e0;
+}
+
+.genre-section h2 {
+    margin-top: 0;
+    color: #333;
+    font-size: 22px;
+}
+
+.genre-search-field {
+    margin-bottom: 30px;
+}
+
+.genre-search-field label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #333;
+}
+
+.genre-search-field input[type="text"] {
+    width: 100%;
+    max-width: 400px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    margin-right: 10px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.search-genre-button {
+    padding: 10px 20px;
+    background-color: #1db954;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.search-genre-button:hover {
+    background-color: #1ed760;
+}
+
+.genre-table-section {
+    margin-bottom: 40px;
+}
+
+.genre-table-section h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 18px;
+}
+
+@media (max-width: 768px) {
+    .genre-search-field input[type="text"] {
+        max-width: 100%;
+        margin-right: 0;
+        margin-bottom: 10px;
+        display: block;
+    }
+    
+    .search-genre-button {
+        display: block;
+        width: 100%;
+        max-width: 400px;
+    }
+}

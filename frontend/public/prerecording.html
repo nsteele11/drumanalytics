@@ -67,6 +67,67 @@
             </div>
             <button id="clearComparison" class="clear-button">Clear All</button>
         </div>
+
+        <!-- Genre Analysis Section -->
+        <div class="genre-section">
+            <h2>Genre Analysis</h2>
+            <p style="color: #666; margin-bottom: 20px;">Select a genre to see top 40 artists by followers and top 40 tracks by popularity</p>
+            
+            <div class="genre-search-field">
+                <label>Select Genre</label><br>
+                <input type="text" id="genre-search" placeholder="Type genre name (e.g., hip hop, rock, pop)" autocomplete="off">
+                <button id="searchGenre" class="search-genre-button">Search Genre</button>
+            </div>
+
+            <div id="genreResults" style="display: none;">
+                <div id="genreLoading" style="text-align: center; padding: 20px; display: none;">
+                    Loading genre data...
+                </div>
+
+                <!-- Top Artists Table -->
+                <div class="genre-table-section">
+                    <h3>Top 40 Artists by Followers</h3>
+                    <div class="table-container">
+                        <table class="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Artist</th>
+                                    <th>Followers</th>
+                                    <th>Popularity</th>
+                                    <th>Genres</th>
+                                </tr>
+                            </thead>
+                            <tbody id="topArtistsTableBody">
+                                <!-- Rows will be added here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Top Tracks Table -->
+                <div class="genre-table-section">
+                    <h3>Top 40 Tracks by Popularity</h3>
+                    <div class="table-container">
+                        <table class="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Track</th>
+                                    <th>Artist</th>
+                                    <th>Popularity</th>
+                                    <th>Album</th>
+                                    <th>Release Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="topTracksTableBody">
+                                <!-- Rows will be added here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </main>
 
@@ -248,6 +309,102 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/* -----------------------------
+   GENRE SEARCH
+--------------------------------*/
+const genreSearchInput = document.getElementById('genre-search');
+const searchGenreButton = document.getElementById('searchGenre');
+const genreResults = document.getElementById('genreResults');
+const genreLoading = document.getElementById('genreLoading');
+const topArtistsTableBody = document.getElementById('topArtistsTableBody');
+const topTracksTableBody = document.getElementById('topTracksTableBody');
+
+searchGenreButton.addEventListener('click', async () => {
+    const genre = genreSearchInput.value.trim();
+    if (!genre) {
+        alert('Please enter a genre name');
+        return;
+    }
+
+    await loadGenreData(genre);
+});
+
+// Allow Enter key to trigger search
+genreSearchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        searchGenreButton.click();
+    }
+});
+
+async function loadGenreData(genre) {
+    genreLoading.style.display = 'block';
+    genreResults.style.display = 'none';
+    topArtistsTableBody.innerHTML = '';
+    topTracksTableBody.innerHTML = '';
+
+    try {
+        // Fetch both artists and tracks in parallel
+        const [artistsRes, tracksRes] = await Promise.all([
+            fetch(`/api/spotify/genre/artists?genre=${encodeURIComponent(genre)}`),
+            fetch(`/api/spotify/genre/tracks?genre=${encodeURIComponent(genre)}`)
+        ]);
+
+        if (!artistsRes.ok || !tracksRes.ok) {
+            throw new Error('Failed to fetch genre data');
+        }
+
+        const artists = await artistsRes.json();
+        const tracks = await tracksRes.json();
+
+        // Display artists
+        if (artists.length > 0) {
+            artists.forEach((artist, index) => {
+                const row = document.createElement('tr');
+                const genres = artist.genres && artist.genres.length > 0 
+                    ? artist.genres.slice(0, 3).join(', ') 
+                    : 'N/A';
+                
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(artist.name)}</td>
+                    <td>${artist.followers.toLocaleString()}</td>
+                    <td>${artist.popularity}</td>
+                    <td>${escapeHtml(genres)}</td>
+                `;
+                topArtistsTableBody.appendChild(row);
+            });
+        } else {
+            topArtistsTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No artists found for this genre</td></tr>';
+        }
+
+        // Display tracks
+        if (tracks.length > 0) {
+            tracks.forEach((track, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(track.name)}</td>
+                    <td>${escapeHtml(track.artist)}</td>
+                    <td>${track.popularity}</td>
+                    <td>${escapeHtml(track.album || 'N/A')}</td>
+                    <td>${escapeHtml(track.releaseDate || 'N/A')}</td>
+                `;
+                topTracksTableBody.appendChild(row);
+            });
+        } else {
+            topTracksTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No tracks found for this genre</td></tr>';
+        }
+
+        genreLoading.style.display = 'none';
+        genreResults.style.display = 'block';
+
+    } catch (err) {
+        genreLoading.style.display = 'none';
+        alert(`Error loading genre data: ${err.message}`);
+        console.error('Error loading genre data:', err);
+    }
 }
 </script>
 
