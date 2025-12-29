@@ -216,6 +216,7 @@ router.get("/artist/:artistId/tracks/popular", async (req, res) => {
 
     const artistData = await artistRes.json();
     const artistName = artistData.name;
+    const artistGenres = artistData.genres || []; // Get artist genres
 
     // Search for tracks by this artist
     let allTracks = [];
@@ -255,7 +256,8 @@ router.get("/artist/:artistId/tracks/popular", async (req, res) => {
           album: track.album.name,
           albumImageUrl: track.album.images[0]?.url || null,
           releaseDate: track.album.release_date,
-          durationMs: track.duration_ms
+          durationMs: track.duration_ms,
+          genres: artistGenres // Include artist genres with each track
         }));
 
       allTracks = [...allTracks, ...artistTracks];

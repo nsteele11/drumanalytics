@@ -94,6 +94,7 @@
                                 <th>Track</th>
                                 <th>Album</th>
                                 <th>Popularity</th>
+                                <th>Genre</th>
                                 <th>Release Date</th>
                             </tr>
                         </thead>
@@ -363,9 +364,47 @@ trackSearchInput.addEventListener('change', async (e) => {
 });
 
 /* -----------------------------
-   ADD TO COMPARISON
+   ADD TO COMPARISON (REUSABLE FUNCTION)
 --------------------------------*/
-addButton.addEventListener('click', () => {
+async function addTrackToComparison(trackId) {
+    try {
+        // Fetch full track metadata
+        const metaRes = await fetch(`/api/spotify/track/${trackId}`);
+        if (!metaRes.ok) {
+            throw new Error('Failed to fetch track metadata');
+        }
+        
+        const trackMetadata = await metaRes.json();
+
+        // Check if track is already in comparison
+        const exists = comparisonTracks.some(t => t.track.id === trackMetadata.track.id);
+        if (exists) {
+            alert('This track is already in the comparison table');
+            return;
+        }
+
+        // Add to comparison array
+        comparisonTracks.push(trackMetadata);
+
+        // Update table
+        updateComparisonTable();
+
+        // Show comparison section
+        comparisonSection.style.display = 'block';
+        
+        // Scroll to comparison section
+        comparisonSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+    } catch (err) {
+        console.error('Error adding track to comparison:', err);
+        alert(`Failed to add track to comparison: ${err.message}`);
+    }
+}
+
+/* -----------------------------
+   ADD TO COMPARISON (BUTTON HANDLER)
+--------------------------------*/
+addButton.addEventListener('click', async () => {
     if (!currentTrackMetadata) return;
 
     // Check if track is already in comparison
@@ -540,12 +579,19 @@ async function loadGenreData(genre) {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${index + 1}</td>
-                    <td>${escapeHtml(track.name)}</td>
+                    <td><a href="#" class="clickable-track" data-track-id="${track.id}">${escapeHtml(track.name)}</a></td>
                     <td><a href="#" class="clickable-artist" data-artist-id="${track.artistId || ''}" data-artist-name="${escapeHtml(track.artist)}">${escapeHtml(track.artist)}</a></td>
                     <td>${track.popularity}</td>
                     <td>${escapeHtml(track.album || 'N/A')}</td>
                     <td>${escapeHtml(track.releaseDate || 'N/A')}</td>
                 `;
+                
+                // Add click handler for track name
+                const trackLink = row.querySelector('.clickable-track');
+                trackLink.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    await addTrackToComparison(track.id);
+                });
                 
                 // Add click handler for artist name (if artistId is available)
                 if (track.artistId) {
@@ -627,17 +673,31 @@ async function loadArtistPopularTracks(artistId) {
         artistAnalysisLoading.style.display = 'none';
 
         if (tracks.length === 0) {
-            artistTracksTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No tracks found for this artist</td></tr>';
+            artistTracksTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No tracks found for this artist</td></tr>';
         } else {
             tracks.forEach((track, index) => {
                 const row = document.createElement('tr');
+                // Format genres - show first 3 genres, or 'N/A' if none
+                const genres = track.genres && track.genres.length > 0 
+                    ? track.genres.slice(0, 3).join(', ') 
+                    : 'N/A';
+                
                 row.innerHTML = `
                     <td>${index + 1}</td>
-                    <td>${escapeHtml(track.name)}</td>
+                    <td><a href="#" class="clickable-track" data-track-id="${track.id}">${escapeHtml(track.name)}</a></td>
                     <td>${escapeHtml(track.album || 'N/A')}</td>
                     <td>${track.popularity}</td>
+                    <td>${escapeHtml(genres)}</td>
                     <td>${escapeHtml(track.releaseDate || 'N/A')}</td>
                 `;
+                
+                // Add click handler for track name
+                const trackLink = row.querySelector('.clickable-track');
+                trackLink.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    await addTrackToComparison(track.id);
+                });
+                
                 artistTracksTableBody.appendChild(row);
             });
         }

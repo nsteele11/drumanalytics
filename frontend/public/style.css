@@ -598,6 +598,19 @@ input[type="file"] {
     text-decoration: underline;
 }
 
+.clickable-track {
+    color: #1db954;
+    text-decoration: none;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s, text-decoration 0.2s;
+}
+
+.clickable-track:hover {
+    color: #1ed760;
+    text-decoration: underline;
+}
+
 @media (max-width: 768px) {
     .genre-search-field input[type="text"] {
         max-width: 100%;
