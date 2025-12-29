@@ -48,7 +48,11 @@ export async function detectAudioFeatures(videoPath, tempDir) {
         onsets: null,
         onsetRate: null,
         energy: null,
-        silenceRatio: null
+        silenceRatio: null,
+        tempoSpikes: null,
+        volumeSpikes: null,
+        unusualPatterns: null,
+        shockValue: null
       };
 
       try {
@@ -89,6 +93,17 @@ export async function detectAudioFeatures(videoPath, tempDir) {
           features.silenceRatio = await detectSilenceWithAubio(audioPath);
         } catch (silenceError) {
           console.log("Silence detection failed:", silenceError.message);
+        }
+
+        // Detect tempo spikes, volume spikes, and unusual patterns
+        try {
+          const shockAnalysis = await analyzeShockValue(audioPath);
+          features.tempoSpikes = shockAnalysis.tempoSpikes;
+          features.volumeSpikes = shockAnalysis.volumeSpikes;
+          features.unusualPatterns = shockAnalysis.unusualPatterns;
+          features.shockValue = shockAnalysis.shockValue;
+        } catch (shockError) {
+          console.log("Shock value analysis failed:", shockError.message);
         }
 
       } catch (aubioError) {
@@ -268,10 +283,253 @@ function detectEnergyWithAubio(audioPath) {
         const rmsDb = parseFloat(match[1]);
         resolve(Math.round(rmsDb * 10) / 10);
       } else {
-        reject(new Error("Could not parse energy level"));
+      reject(new Error("Could not parse energy level"));
+    }
+  });
+}
+
+/**
+ * Analyze shock value by detecting tempo spikes, volume spikes, and unusual patterns
+ * Returns shock value score (0-100) and individual metrics
+ */
+function analyzeShockValue(audioPath) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Get detailed onset timestamps
+      const onsetData = await getDetailedOnsets(audioPath);
+      if (!onsetData || onsetData.onsets.length < 2) {
+        resolve({
+          tempoSpikes: 0,
+          volumeSpikes: 0,
+          unusualPatterns: 0,
+          shockValue: 0
+        });
+        return;
+      }
+
+      // Get energy data over time
+      let energyData = { energyValues: [], useFallback: true };
+      try {
+        energyData = await getEnergyOverTime(audioPath);
+      } catch (energyError) {
+        console.log("Energy analysis failed, using fallback:", energyError.message);
+      }
+      
+      // Analyze tempo spikes (fills) - sudden decreases in onset intervals
+      const tempoSpikes = detectTempoSpikes(onsetData.onsets);
+      
+      // Analyze volume spikes (accents) - sudden increases in energy
+      const volumeSpikes = detectVolumeSpikes(energyData);
+      
+      // Analyze unusual patterns (complex hits, odd timing) - high variance in intervals
+      const unusualPatterns = detectUnusualPatterns(onsetData.onsets);
+      
+      // Calculate shock value score (0-100)
+      // If energy data isn't available, adjust weights: tempo spikes 40%, unusual patterns 60%
+      const weights = energyData.useFallback 
+        ? { tempo: 0.4, volume: 0.0, unusual: 0.6 }
+        : { tempo: 0.3, volume: 0.3, unusual: 0.4 };
+      
+      const shockValue = Math.min(100, Math.round(
+        (tempoSpikes * weights.tempo) + 
+        (volumeSpikes * weights.volume) + 
+        (unusualPatterns * weights.unusual)
+      ));
+
+      resolve({
+        tempoSpikes: Math.round(tempoSpikes * 10) / 10,
+        volumeSpikes: Math.round(volumeSpikes * 10) / 10,
+        unusualPatterns: Math.round(unusualPatterns * 10) / 10,
+        shockValue: shockValue
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Get detailed onset timestamps
+ */
+function getDetailedOnsets(audioPath) {
+  return new Promise((resolve, reject) => {
+    const cmd = `aubio onset "${audioPath}"`;
+    
+    exec(cmd, { timeout: 60000 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`Onset detection failed: ${error.message}`));
+        return;
+      }
+
+      const lines = stdout.trim().split('\n').filter(line => line.trim() && !line.startsWith('#'));
+      const onsets = lines.map(line => parseFloat(line.trim())).filter(t => !isNaN(t) && t >= 0);
+      
+      resolve({ onsets: onsets });
+    });
+  });
+}
+
+/**
+ * Get energy data over time using ffmpeg
+ */
+function getEnergyOverTime(audioPath) {
+  return new Promise((resolve, reject) => {
+    // Use ffmpeg to get RMS energy values over time (every 0.1 seconds)
+    // Output to a format we can parse
+    const cmd = `ffmpeg -i "${audioPath}" -af "astats=metadata=1:reset=0.1:length=0.1" -f null - 2>&1`;
+    
+    exec(cmd, { timeout: 60000 }, (error, stdout, stderr) => {
+      // ffmpeg outputs to stderr, not stdout
+      const output = stderr || stdout;
+      
+      if (error && !output) {
+        reject(new Error("Failed to get energy data"));
+        return;
+      }
+
+      // Parse RMS levels (format: "RMS level: -XX.X dB")
+      const lines = output.split('\n');
+      const energyValues = [];
+      
+      lines.forEach(line => {
+        // Look for RMS level patterns
+        const match = line.match(/RMS level:\s*([-\d.]+)\s*dB/);
+        if (match) {
+          const rmsDb = parseFloat(match[1]);
+          if (!isNaN(rmsDb)) {
+            energyValues.push(rmsDb);
+          }
+        }
+      });
+
+      // If we didn't get enough data, try a simpler approach
+      if (energyValues.length < 3) {
+        // Fallback: use average energy as baseline and estimate spikes from onsets
+        // This is a simplified approach when detailed energy data isn't available
+        resolve({ energyValues: [], useFallback: true });
+      } else {
+        resolve({ energyValues: energyValues, useFallback: false });
       }
     });
   });
+}
+
+/**
+ * Detect tempo spikes (fills) - sudden increases in onset density
+ * Returns score 0-100
+ */
+function detectTempoSpikes(onsets) {
+  if (onsets.length < 3) return 0;
+
+  // Calculate intervals between onsets
+  const intervals = [];
+  for (let i = 1; i < onsets.length; i++) {
+    intervals.push(onsets[i] - onsets[i - 1]);
+  }
+
+  if (intervals.length < 2) return 0;
+
+  // Calculate average interval
+  const avgInterval = intervals.reduce((sum, i) => sum + i, 0) / intervals.length;
+
+  // Detect spikes: intervals that are significantly shorter than average (fills)
+  let spikeCount = 0;
+  let totalSpikeIntensity = 0;
+
+  intervals.forEach(interval => {
+    // If interval is less than 60% of average, it's a tempo spike
+    if (interval < avgInterval * 0.6 && avgInterval > 0) {
+      spikeCount++;
+      // Calculate intensity: how much faster than average (0-100 scale)
+      const intensity = Math.min(100, ((avgInterval - interval) / avgInterval) * 200);
+      totalSpikeIntensity += intensity;
+    }
+  });
+
+  // Score based on spike frequency and intensity
+  const spikeFrequency = (spikeCount / intervals.length) * 100;
+  const avgIntensity = spikeCount > 0 ? totalSpikeIntensity / spikeCount : 0;
+  
+  return Math.min(100, (spikeFrequency * 0.5) + (avgIntensity * 0.5));
+}
+
+/**
+ * Detect volume spikes (accents) - sudden increases in energy
+ * Returns score 0-100
+ */
+function detectVolumeSpikes(energyData) {
+  // If we have detailed energy data, use it
+  if (energyData.energyValues && energyData.energyValues.length >= 3) {
+    const energies = energyData.energyValues;
+    
+    // Calculate average and standard deviation
+    const avgEnergy = energies.reduce((sum, e) => sum + e, 0) / energies.length;
+    const variance = energies.reduce((sum, e) => sum + Math.pow(e - avgEnergy, 2), 0) / energies.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Detect spikes: energy values significantly above average
+    let spikeCount = 0;
+    let totalSpikeIntensity = 0;
+
+    energies.forEach(energy => {
+      // If energy is more than 1.5 standard deviations above average, it's a spike
+      if (energy > avgEnergy + (stdDev * 1.5)) {
+        spikeCount++;
+        // Calculate intensity: how much louder than average
+        const intensity = Math.min(100, ((energy - avgEnergy) / Math.abs(avgEnergy)) * 50);
+        totalSpikeIntensity += intensity;
+      }
+    });
+
+    // Score based on spike frequency and intensity
+    const spikeFrequency = (spikeCount / energies.length) * 100;
+    const avgIntensity = spikeCount > 0 ? totalSpikeIntensity / spikeCount : 0;
+    
+    return Math.min(100, (spikeFrequency * 0.5) + (avgIntensity * 0.5));
+  }
+  
+  // Fallback: estimate volume spikes from onset density variations
+  // Higher onset density in short periods suggests volume spikes
+  // This is a simplified estimation when detailed energy data isn't available
+  return 0; // Return 0 if we can't analyze properly
+}
+
+/**
+ * Detect unusual patterns (complex hits, odd timing) - high variance in timing
+ * Returns score 0-100
+ */
+function detectUnusualPatterns(onsets) {
+  if (onsets.length < 3) return 0;
+
+  // Calculate intervals between onsets
+  const intervals = [];
+  for (let i = 1; i < onsets.length; i++) {
+    intervals.push(onsets[i] - onsets[i - 1]);
+  }
+
+  if (intervals.length < 2) return 0;
+
+  // Calculate coefficient of variation (CV) = std dev / mean
+  // Higher CV = more irregular timing
+  const avgInterval = intervals.reduce((sum, i) => sum + i, 0) / intervals.length;
+  const variance = intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length;
+  const stdDev = Math.sqrt(variance);
+  
+  if (avgInterval === 0) return 0;
+  
+  const coefficientOfVariation = stdDev / avgInterval;
+  
+  // Also check for polyrhythmic patterns (multiple interval lengths)
+  const uniqueIntervals = new Set(intervals.map(i => Math.round(i * 100) / 100));
+  const intervalDiversity = (uniqueIntervals.size / intervals.length) * 100;
+  
+  // Score combines CV and diversity (0-100 scale)
+  // CV of 0.3+ is considered unusual, scale to 100
+  const cvScore = Math.min(100, (coefficientOfVariation / 0.3) * 100);
+  const diversityScore = Math.min(100, intervalDiversity * 2);
+  
+  return Math.min(100, (cvScore * 0.6) + (diversityScore * 0.4));
+});
 }
 
 /**

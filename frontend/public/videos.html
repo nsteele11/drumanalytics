@@ -117,6 +117,7 @@ function createVideoCard(video) {
                     ${video.genres && video.genres.length > 0 ? `<div class="video-meta-item"><strong>Genres:</strong> ${escapeHtml(video.genres.join(', '))}</div>` : ''}
                     ${video.duration ? `<div class="video-meta-item"><strong>Duration:</strong> ${formatDuration(video.duration)}</div>` : ''}
                     ${video.bpm ? `<div class="video-meta-item"><strong>BPM:</strong> ${video.bpm}</div>` : ''}
+                    ${video.shockValue !== null ? `<div class="video-meta-item"><strong>Shock Value:</strong> <span style="font-weight: bold; color: ${getShockValueColor(video.shockValue)};">${video.shockValue}/100</span></div>` : ''}
                     ${video.pitch ? `<div class="video-meta-item"><strong>Avg Pitch:</strong> ${video.pitch} Hz${video.pitchConfidence ? ` (confidence: ${video.pitchConfidence})` : ''}</div>` : ''}
                     ${video.onsets !== null ? `<div class="video-meta-item"><strong>Onsets:</strong> ${video.onsets} (${video.onsetRate || 0}/sec)</div>` : ''}
                     ${video.energy !== null ? `<div class="video-meta-item"><strong>Energy:</strong> ${video.energy} dB</div>` : ''}
@@ -259,6 +260,12 @@ function formatDuration(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function getShockValueColor(score) {
+    if (score >= 70) return '#dc3545'; // Red - high shock
+    if (score >= 40) return '#ffc107'; // Yellow - medium shock
+    return '#28a745'; // Green - low shock
 }
 
 // Load videos when page loads

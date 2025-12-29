@@ -418,6 +418,10 @@ app.get("/api/videos", async (req, res) => {
           onsetRate: metadata.analysis?.onsetRate || null,
           energy: metadata.analysis?.energy || null,
           silenceRatio: metadata.analysis?.silenceRatio || null,
+          tempoSpikes: metadata.analysis?.tempoSpikes || null,
+          volumeSpikes: metadata.analysis?.volumeSpikes || null,
+          unusualPatterns: metadata.analysis?.unusualPatterns || null,
+          shockValue: metadata.analysis?.shockValue || null,
         };
 
         videos.push(videoInfo);
