@@ -109,7 +109,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
       }
     } else {
       // For other types, require Spotify artistId and trackId
-      if (!artistId || !trackId) {
+    if (!artistId || !trackId) {
         return res.status(400).send("Artist and track must be selected from Spotify");
       }
     }
@@ -287,7 +287,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     // Cleanup local file
     // ----------------------
     try {
-      fs.unlinkSync(file.path);
+    fs.unlinkSync(file.path);
     } catch (cleanupError) {
       console.warn("Failed to delete local file:", cleanupError);
     }
@@ -601,6 +601,345 @@ app.put("/api/videos/:s3Key/metrics", async (req, res) => {
     res.status(500).json({ error: "Failed to update metrics", message: err.message });
   }
 });
+
+// ----------------------
+// Get Hashtag Suggestions Endpoint
+// ----------------------
+app.get("/api/videos/:s3Key/hashtag-suggestions", async (req, res) => {
+  try {
+    const { s3Key } = req.params;
+    
+    if (!s3Key) {
+      return res.status(400).json({ error: "Video key is required" });
+    }
+
+    if (!process.env.S3_BUCKET_NAME) {
+      console.error("S3_BUCKET_NAME environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    // Get the current video's metadata
+    const metadataKey = `results/${s3Key}.json`;
+    const getMetadataCommand = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: metadataKey,
+    });
+
+    let currentVideo;
+    try {
+      const metadataResponse = await s3.send(getMetadataCommand);
+      const metadataStream = metadataResponse.Body;
+      
+      const metadataText = await new Promise((resolve, reject) => {
+        const chunks = [];
+        metadataStream.on('data', (chunk) => chunks.push(chunk));
+        metadataStream.on('end', () => {
+          try {
+            resolve(Buffer.concat(chunks).toString('utf-8'));
+          } catch (err) {
+            reject(err);
+          }
+        });
+        metadataStream.on('error', reject);
+      });
+
+      currentVideo = JSON.parse(metadataText);
+    } catch (err) {
+      console.error("Error fetching current video metadata:", err);
+      return res.status(404).json({ error: "Video metadata not found" });
+    }
+
+    // Get all videos to analyze historical performance
+    const listCommand = new ListObjectsV2Command({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Prefix: "results/",
+    });
+
+    const listResponse = await s3.send(listCommand);
+    const allVideos = [];
+
+    if (listResponse.Contents) {
+      for (const obj of listResponse.Contents) {
+        if (obj.Key.endsWith('.json')) {
+          try {
+            const getObjCommand = new GetObjectCommand({
+              Bucket: process.env.S3_BUCKET_NAME,
+              Key: obj.Key,
+            });
+
+            const objResponse = await s3.send(getObjCommand);
+            const objStream = objResponse.Body;
+            
+            const objText = await new Promise((resolve, reject) => {
+              const chunks = [];
+              objStream.on('data', (chunk) => chunks.push(chunk));
+              objStream.on('end', () => {
+                try {
+                  resolve(Buffer.concat(chunks).toString('utf-8'));
+                } catch (err) {
+                  reject(err);
+                }
+              });
+              objStream.on('error', reject);
+            });
+
+            const videoData = JSON.parse(objText);
+            allVideos.push(videoData);
+          } catch (err) {
+            console.warn(`Error reading video metadata ${obj.Key}:`, err.message);
+          }
+        }
+      }
+    }
+
+    // Generate hashtag suggestions
+    const suggestions = generateHashtagSuggestions(currentVideo, allVideos);
+
+    res.json(suggestions);
+  } catch (err) {
+    console.error("Error generating hashtag suggestions:", err);
+    res.status(500).json({ error: "Failed to generate suggestions", message: err.message });
+  }
+});
+
+// ----------------------
+// Hashtag Suggestion Algorithm
+// ----------------------
+function generateHashtagSuggestions(currentVideo, allVideos) {
+  const artistName = currentVideo.artistName || currentVideo.spotify?.artist?.name || '';
+  const trackName = currentVideo.trackName || currentVideo.spotify?.track?.name || '';
+  const genres = currentVideo.spotify?.artist?.genres || [];
+
+  // Extract and normalize hashtags from historical data
+  const hashtagPerformance = new Map(); // hashtag -> { igViews, igLikes, tiktokViews, tiktokLikes, count }
+
+  allVideos.forEach(video => {
+    // Skip current video
+    if (video.s3Key === currentVideo.s3Key) return;
+
+    // Analyze Instagram hashtags
+    if (video.igHashtags) {
+      const igTags = extractHashtags(video.igHashtags);
+      const igEngagement = calculateEngagement(video.igViews, video.igLikes);
+      
+      igTags.forEach(tag => {
+        if (!hashtagPerformance.has(tag)) {
+          hashtagPerformance.set(tag, { igViews: 0, igLikes: 0, tiktokViews: 0, tiktokLikes: 0, count: 0, igEngagement: 0, tiktokEngagement: 0 });
+        }
+        const perf = hashtagPerformance.get(tag);
+        perf.igViews += (video.igViews || 0);
+        perf.igLikes += (video.igLikes || 0);
+        perf.count += 1;
+        perf.igEngagement += igEngagement;
+      });
+    }
+
+    // Analyze TikTok hashtags
+    if (video.tiktokHashtags) {
+      const tiktokTags = extractHashtags(video.tiktokHashtags);
+      const tiktokEngagement = calculateEngagement(video.tiktokViews, video.tiktokLikes);
+      
+      tiktokTags.forEach(tag => {
+        if (!hashtagPerformance.has(tag)) {
+          hashtagPerformance.set(tag, { igViews: 0, igLikes: 0, tiktokViews: 0, tiktokLikes: 0, count: 0, igEngagement: 0, tiktokEngagement: 0 });
+        }
+        const perf = hashtagPerformance.get(tag);
+        perf.tiktokViews += (video.tiktokViews || 0);
+        perf.tiktokLikes += (video.tiktokLikes || 0);
+        perf.count += 1;
+        perf.tiktokEngagement += tiktokEngagement;
+      });
+    }
+  });
+
+  // Calculate average engagement per hashtag
+  hashtagPerformance.forEach((perf, tag) => {
+    if (perf.count > 0) {
+      perf.igEngagement = perf.count > 0 ? perf.igEngagement / perf.count : 0;
+      perf.tiktokEngagement = perf.count > 0 ? perf.tiktokEngagement / perf.count : 0;
+    }
+  });
+
+  // Generate base hashtags
+  const baseHashtags = generateBaseHashtags(artistName, trackName, genres);
+
+  // Generate Instagram recommendations
+  const instagramSuggestions = generatePlatformSuggestions(
+    baseHashtags,
+    hashtagPerformance,
+    'instagram',
+    15
+  );
+
+  // Generate TikTok recommendations
+  const tiktokSuggestions = generatePlatformSuggestions(
+    baseHashtags,
+    hashtagPerformance,
+    'tiktok',
+    15
+  );
+
+  return {
+    instagram: instagramSuggestions,
+    tiktok: tiktokSuggestions
+  };
+}
+
+function extractHashtags(text) {
+  if (!text) return [];
+  const hashtagRegex = /#[\w]+/g;
+  const matches = text.match(hashtagRegex) || [];
+  return matches.map(tag => tag.toLowerCase());
+}
+
+function calculateEngagement(views, likes) {
+  if (!views || views === 0) return 0;
+  if (!likes) return 0;
+  // Engagement rate: likes per 1000 views
+  return (likes / views) * 1000;
+}
+
+function generateBaseHashtags(artistName, trackName, genres) {
+  const hashtags = [];
+
+  // Always include band name
+  if (artistName) {
+    const bandTag = `#${normalizeForHashtag(artistName)}`;
+    hashtags.push({ tag: bandTag, priority: 10, source: 'band' });
+  }
+
+  // Add track name (if not too long)
+  if (trackName && trackName.length < 30) {
+    const trackTag = `#${normalizeForHashtag(trackName)}`;
+    hashtags.push({ tag: trackTag, priority: 8, source: 'track' });
+  }
+
+  // Add genre-based hashtags
+  genres.forEach(genre => {
+    const genreTag = `#${normalizeForHashtag(genre)}`;
+    hashtags.push({ tag: genreTag, priority: 7, source: 'genre' });
+  });
+
+  // Add general drumming/music hashtags
+  const generalTags = [
+    '#drumming', '#drummer', '#drums', '#music', '#musician',
+    '#drumcover', '#drumvideo', '#drumlife', '#drummerlife',
+    '#musicproduction', '#livemusic', '#rockmusic', '#musiclover'
+  ];
+
+  generalTags.forEach(tag => {
+    hashtags.push({ tag, priority: 5, source: 'general' });
+  });
+
+  return hashtags;
+}
+
+function normalizeForHashtag(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+    .replace(/\s+/g, '') // Remove spaces
+    .substring(0, 30); // Limit length
+}
+
+function generatePlatformSuggestions(baseHashtags, hashtagPerformance, platform, maxCount) {
+  const suggestions = [];
+  const usedTags = new Set();
+
+  // Always include band name first
+  const bandTag = baseHashtags.find(h => h.source === 'band');
+  if (bandTag) {
+    suggestions.push(bandTag.tag);
+    usedTags.add(bandTag.tag.toLowerCase());
+  }
+
+  // Score all potential hashtags
+  const scoredHashtags = [];
+
+  // Score base hashtags
+  baseHashtags.forEach(base => {
+    if (usedTags.has(base.tag.toLowerCase())) return;
+    
+    const perf = hashtagPerformance.get(base.tag.toLowerCase());
+    let score = base.priority;
+
+    if (perf) {
+      // Boost score based on historical performance
+      const engagement = platform === 'instagram' ? perf.igEngagement : perf.tiktokEngagement;
+      const views = platform === 'instagram' ? perf.igViews : perf.tiktokViews;
+      
+      // Add performance boost (normalized)
+      score += Math.min(engagement / 10, 3); // Max 3 point boost from engagement
+      score += Math.min(Math.log10(views + 1) / 2, 2); // Max 2 point boost from views
+      score += Math.min(perf.count / 5, 1); // Max 1 point boost from usage frequency
+    }
+
+    scoredHashtags.push({ tag: base.tag, score, source: base.source });
+  });
+
+  // Score historical hashtags that aren't in base list
+  hashtagPerformance.forEach((perf, tag) => {
+    if (usedTags.has(tag)) return;
+    
+    const engagement = platform === 'instagram' ? perf.igEngagement : perf.tiktokEngagement;
+    const views = platform === 'instagram' ? perf.igViews : perf.tiktokViews;
+    
+    if (engagement > 0 || views > 0) {
+      let score = 3; // Base score for historical tags
+      score += Math.min(engagement / 10, 3);
+      score += Math.min(Math.log10(views + 1) / 2, 2);
+      score += Math.min(perf.count / 5, 1);
+      
+      scoredHashtags.push({ tag: `#${tag.replace('#', '')}`, score, source: 'historical' });
+    }
+  });
+
+  // Sort by score (highest first)
+  scoredHashtags.sort((a, b) => b.score - a.score);
+
+  // Add top suggestions, mixing them up
+  const remaining = scoredHashtags.filter(h => !usedTags.has(h.tag.toLowerCase()));
+  
+  // Mix: take some high priority, some medium, some lower
+  const highPriority = remaining.filter(h => h.score >= 7).slice(0, 5);
+  const mediumPriority = remaining.filter(h => h.score >= 5 && h.score < 7).slice(0, 5);
+  const lowPriority = remaining.filter(h => h.score < 5).slice(0, 5);
+
+  // Interleave them for variety
+  const mixed = [];
+  const maxLen = Math.max(highPriority.length, mediumPriority.length, lowPriority.length);
+  
+  for (let i = 0; i < maxLen && mixed.length < maxCount - 1; i++) {
+    if (i < highPriority.length && !usedTags.has(highPriority[i].tag.toLowerCase())) {
+      mixed.push(highPriority[i].tag);
+      usedTags.add(highPriority[i].tag.toLowerCase());
+    }
+    if (mixed.length >= maxCount - 1) break;
+    
+    if (i < mediumPriority.length && !usedTags.has(mediumPriority[i].tag.toLowerCase())) {
+      mixed.push(mediumPriority[i].tag);
+      usedTags.add(mediumPriority[i].tag.toLowerCase());
+    }
+    if (mixed.length >= maxCount - 1) break;
+    
+    if (i < lowPriority.length && !usedTags.has(lowPriority[i].tag.toLowerCase())) {
+      mixed.push(lowPriority[i].tag);
+      usedTags.add(lowPriority[i].tag.toLowerCase());
+    }
+  }
+
+  suggestions.push(...mixed);
+
+  // Ensure we have at least maxCount hashtags
+  while (suggestions.length < maxCount && remaining.length > 0) {
+    const next = remaining.find(h => !usedTags.has(h.tag.toLowerCase()));
+    if (!next) break;
+    suggestions.push(next.tag);
+    usedTags.add(next.tag.toLowerCase());
+  }
+
+  return suggestions.slice(0, maxCount);
+}
 
 // ----------------------
 // Delete Video Endpoint

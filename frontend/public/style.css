@@ -508,6 +508,191 @@ input[type="file"] {
     font-weight: 600;
 }
 
+.suggest-hashtags-btn {
+    padding: 10px 20px;
+    background-color: #6f42c1;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.suggest-hashtags-btn:hover:not(:disabled) {
+    background-color: #5a32a3;
+}
+
+.suggest-hashtags-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+/* Hashtag Suggestions Modal */
+.hashtag-suggestions-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.hashtag-suggestions-modal-content {
+    background-color: white;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.hashtag-suggestions-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    position: sticky;
+    top: 0;
+    background-color: white;
+    z-index: 10;
+}
+
+.hashtag-suggestions-modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #333;
+}
+
+.hashtag-suggestions-loading {
+    padding: 40px 20px;
+    text-align: center;
+    color: #666;
+}
+
+.hashtag-suggestions-content {
+    padding: 20px;
+}
+
+.hashtag-platform-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.hashtag-platform-section:last-of-type {
+    border-bottom: none;
+}
+
+.hashtag-platform-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 18px;
+    color: #333;
+    font-weight: 600;
+}
+
+.hashtag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+    min-height: 50px;
+}
+
+.hashtag-tag {
+    display: inline-block;
+    padding: 8px 12px;
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.hashtag-tag:hover {
+    background-color: #e0e0e0;
+    border-color: #999;
+    transform: translateY(-2px);
+}
+
+.hashtag-tag.hashtag-top {
+    background-color: #6f42c1;
+    color: white;
+    border-color: #5a32a3;
+    font-weight: 600;
+}
+
+.hashtag-tag.hashtag-top:hover {
+    background-color: #5a32a3;
+}
+
+.hashtag-tag.hashtag-copied {
+    background-color: #28a745;
+    color: white;
+    border-color: #218838;
+}
+
+.copy-hashtags-btn {
+    padding: 10px 20px;
+    background-color: #6f42c1;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.copy-hashtags-btn:hover {
+    background-color: #5a32a3;
+}
+
+.hashtag-suggestions-footer {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.hashtag-note {
+    font-size: 12px;
+    color: #666;
+    margin: 0;
+    font-style: italic;
+}
+
+.hashtag-suggestions-error {
+    padding: 40px 20px;
+    text-align: center;
+    color: #dc3545;
+}
+
+.retry-btn {
+    margin-top: 15px;
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.retry-btn:hover {
+    background-color: #0056b3;
+}
+
 /* Pre Recording Page Styles */
 .search-section {
     margin-bottom: 30px;

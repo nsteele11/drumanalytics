@@ -140,6 +140,9 @@ function createVideoCard(video) {
                     <button class="edit-metrics-btn" data-s3key="${escapeHtml(video.s3Key)}">
                         ✏️ Edit Metrics
                     </button>
+                    <button class="suggest-hashtags-btn" data-s3key="${escapeHtml(video.s3Key)}">
+                        Suggest #s
+                    </button>
                     <button class="delete-video-btn" data-s3key="${escapeHtml(video.s3Key)}">
                         🗑️ Delete
                     </button>
@@ -158,6 +161,12 @@ function createVideoCard(video) {
     const editBtn = card.querySelector('.edit-metrics-btn');
     editBtn.addEventListener('click', () => {
         openEditMetricsModal(video, card);
+    });
+
+    // Add click handler for suggest hashtags button
+    const suggestBtn = card.querySelector('.suggest-hashtags-btn');
+    suggestBtn.addEventListener('click', async () => {
+        await openHashtagSuggestionsModal(video);
     });
 
     // Add click handler for delete button
@@ -394,6 +403,119 @@ function openEditMetricsModal(video, cardElement) {
             console.error('Error updating metrics:', err);
         }
     });
+}
+
+// Hashtag Suggestions Modal
+async function openHashtagSuggestionsModal(video) {
+    // Show loading state
+    const modal = document.createElement('div');
+    modal.className = 'hashtag-suggestions-modal';
+    modal.innerHTML = `
+        <div class="hashtag-suggestions-modal-content">
+            <div class="hashtag-suggestions-modal-header">
+                <h2>Hashtag Suggestions - ${escapeHtml(video.trackName)}</h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="hashtag-suggestions-loading">
+                <p>Analyzing historical data and generating recommendations...</p>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close modal handler
+    const closeBtn = modal.querySelector('.close-modal-btn');
+    const closeModal = () => {
+        document.body.removeChild(modal);
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    
+    try {
+        // Fetch hashtag suggestions from backend
+        const response = await fetch(`/api/videos/${encodeURIComponent(video.s3Key)}/hashtag-suggestions`);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to get suggestions: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Update modal with suggestions
+        const loadingDiv = modal.querySelector('.hashtag-suggestions-loading');
+        loadingDiv.innerHTML = `
+            <div class="hashtag-suggestions-content">
+                <div class="hashtag-platform-section">
+                    <h3>📷 Instagram Hashtags</h3>
+                    <div class="hashtag-list">
+                        ${data.instagram.map((tag, index) => `
+                            <span class="hashtag-tag ${index < 5 ? 'hashtag-top' : ''}" data-hashtag="${escapeHtml(tag)}">
+                                ${escapeHtml(tag)}
+                            </span>
+                        `).join('')}
+                    </div>
+                    <button class="copy-hashtags-btn" data-platform="instagram">Copy Instagram Hashtags</button>
+                </div>
+                
+                <div class="hashtag-platform-section">
+                    <h3>🎵 TikTok Hashtags</h3>
+                    <div class="hashtag-list">
+                        ${data.tiktok.map((tag, index) => `
+                            <span class="hashtag-tag ${index < 5 ? 'hashtag-top' : ''}" data-hashtag="${escapeHtml(tag)}">
+                                ${escapeHtml(tag)}
+                            </span>
+                        `).join('')}
+                    </div>
+                    <button class="copy-hashtags-btn" data-platform="tiktok">Copy TikTok Hashtags</button>
+                </div>
+                
+                <div class="hashtag-suggestions-footer">
+                    <p class="hashtag-note">💡 Top 5 recommendations are highlighted. Click any hashtag to copy it individually.</p>
+                </div>
+            </div>
+        `;
+        
+        // Add click handlers for individual hashtags
+        modal.querySelectorAll('.hashtag-tag').forEach(tagEl => {
+            tagEl.addEventListener('click', () => {
+                const hashtag = tagEl.getAttribute('data-hashtag');
+                navigator.clipboard.writeText(hashtag).then(() => {
+                    tagEl.classList.add('hashtag-copied');
+                    setTimeout(() => tagEl.classList.remove('hashtag-copied'), 1000);
+                });
+            });
+        });
+        
+        // Add copy buttons
+        modal.querySelectorAll('.copy-hashtags-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const platform = btn.getAttribute('data-platform');
+                const hashtags = platform === 'instagram' ? data.instagram : data.tiktok;
+                const text = hashtags.join(' ');
+                navigator.clipboard.writeText(text).then(() => {
+                    btn.textContent = '✓ Copied!';
+                    setTimeout(() => {
+                        btn.textContent = platform === 'instagram' ? 'Copy Instagram Hashtags' : 'Copy TikTok Hashtags';
+                    }, 2000);
+                });
+            });
+        });
+        
+    } catch (err) {
+        const loadingDiv = modal.querySelector('.hashtag-suggestions-loading');
+        loadingDiv.innerHTML = `
+            <div class="hashtag-suggestions-error">
+                <p>Error loading suggestions: ${escapeHtml(err.message)}</p>
+                <button class="retry-btn" onclick="location.reload()">Retry</button>
+            </div>
+        `;
+        console.error('Error fetching hashtag suggestions:', err);
+    }
 }
 
 // Load videos when page loads
