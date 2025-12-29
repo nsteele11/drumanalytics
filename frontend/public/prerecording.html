@@ -36,8 +36,10 @@
             <!-- Track Search -->
             <div class="search-field">
                 <label>Track</label><br>
-                <input type="text" id="track-search" placeholder="Select track" autocomplete="off" disabled>
-                <ul id="track-results" class="search-results"></ul>
+                <input type="text" id="track-search" list="track-list" placeholder="Type or select track" autocomplete="off" disabled>
+                <datalist id="track-list">
+                    <!-- Options will be populated dynamically -->
+                </datalist>
             </div>
 
             <button id="addToComparison" class="add-button" disabled>Add to Comparison</button>
@@ -136,9 +138,11 @@ let selectedArtistId = null;
 let selectedTrackId = null;
 let currentTrackMetadata = null;
 let comparisonTracks = [];
+let allArtistTracks = []; // Store all tracks for the selected artist
 
 const artistResults = document.getElementById('artist-results');
-const trackResults = document.getElementById('track-results');
+const trackList = document.getElementById('track-list');
+const trackSearchInput = document.getElementById('track-search');
 const addButton = document.getElementById('addToComparison');
 const comparisonSection = document.getElementById('comparisonSection');
 const comparisonTableBody = document.getElementById('comparisonTableBody');
@@ -165,11 +169,22 @@ document.getElementById('artist-search').addEventListener('input', async (e) => 
         artists.forEach(a => {
             const li = document.createElement('li');
             li.textContent = `${a.name} (${a.followers.toLocaleString()} followers)`;
-            li.onclick = () => {
+            li.onclick = async () => {
                 selectedArtistId = a.spotify_artist_id;
                 document.getElementById('artist-search').value = a.name;
                 artistResults.innerHTML = '';
-                document.getElementById('track-search').disabled = false;
+                
+                // Enable track search and load all tracks for this artist
+                trackSearchInput.disabled = false;
+                trackSearchInput.value = '';
+                trackList.innerHTML = '';
+                allArtistTracks = [];
+                selectedTrackId = null;
+                currentTrackMetadata = null;
+                addButton.disabled = true;
+                
+                // Load all tracks for this artist
+                await loadArtistTracks(selectedArtistId);
             };
             artistResults.appendChild(li);
         });
@@ -179,39 +194,92 @@ document.getElementById('artist-search').addEventListener('input', async (e) => 
 });
 
 /* -----------------------------
-   TRACK SEARCH
+   LOAD ARTIST TRACKS
 --------------------------------*/
-document.getElementById('track-search').addEventListener('input', async (e) => {
-    const query = e.target.value;
-    trackResults.innerHTML = '';
-    if (!query || !selectedArtistId) return;
-
+async function loadArtistTracks(artistId) {
     try {
-        const res = await fetch(`/api/spotify/search/tracks?artistId=${selectedArtistId}&q=${encodeURIComponent(query)}`);
-        const tracks = await res.json();
-
-        tracks.forEach(t => {
-            const li = document.createElement('li');
-            li.textContent = t.name;
-            li.onclick = async () => {
-                selectedTrackId = t.id;
-                document.getElementById('track-search').value = t.name;
-                trackResults.innerHTML = '';
-
-                // Fetch full metadata
-                try {
-                    const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
-                    currentTrackMetadata = await metaRes.json();
-                    addButton.disabled = false;
-                } catch (err) {
-                    console.error('Error fetching track metadata:', err);
-                    alert('Failed to load track metadata');
-                }
-            };
-            trackResults.appendChild(li);
+        const res = await fetch(`/api/spotify/artist/${artistId}/tracks`);
+        if (!res.ok) {
+            throw new Error('Failed to load tracks');
+        }
+        
+        allArtistTracks = await res.json();
+        
+        // Populate datalist with all tracks
+        trackList.innerHTML = '';
+        allArtistTracks.forEach(track => {
+            const option = document.createElement('option');
+            option.value = track.name;
+            option.setAttribute('data-track-id', track.id);
+            trackList.appendChild(option);
         });
     } catch (err) {
-        console.error('Error searching tracks:', err);
+        console.error('Error loading artist tracks:', err);
+        alert('Failed to load tracks for this artist');
+    }
+}
+
+/* -----------------------------
+   TRACK SELECTION
+--------------------------------*/
+trackSearchInput.addEventListener('input', async (e) => {
+    const inputValue = e.target.value.trim();
+    
+    if (!inputValue || !selectedArtistId) {
+        selectedTrackId = null;
+        currentTrackMetadata = null;
+        addButton.disabled = true;
+        return;
+    }
+
+    // Find the track that matches the input value
+    const matchedTrack = allArtistTracks.find(track => 
+        track.name.toLowerCase() === inputValue.toLowerCase()
+    );
+
+    if (matchedTrack) {
+        selectedTrackId = matchedTrack.id;
+        
+        // Fetch full metadata
+        try {
+            const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
+            currentTrackMetadata = await metaRes.json();
+            addButton.disabled = false;
+        } catch (err) {
+            console.error('Error fetching track metadata:', err);
+            alert('Failed to load track metadata');
+            addButton.disabled = true;
+        }
+    } else {
+        selectedTrackId = null;
+        currentTrackMetadata = null;
+        addButton.disabled = true;
+    }
+});
+
+// Handle selection from datalist dropdown
+trackSearchInput.addEventListener('change', async (e) => {
+    const inputValue = e.target.value.trim();
+    
+    if (inputValue && selectedArtistId) {
+        const matchedTrack = allArtistTracks.find(track => 
+            track.name.toLowerCase() === inputValue.toLowerCase()
+        );
+
+        if (matchedTrack) {
+            selectedTrackId = matchedTrack.id;
+            
+            // Fetch full metadata
+            try {
+                const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
+                currentTrackMetadata = await metaRes.json();
+                addButton.disabled = false;
+            } catch (err) {
+                console.error('Error fetching track metadata:', err);
+                alert('Failed to load track metadata');
+                addButton.disabled = true;
+            }
+        }
     }
 });
 

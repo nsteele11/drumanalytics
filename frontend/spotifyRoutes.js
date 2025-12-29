@@ -91,6 +91,51 @@ router.get("/search/tracks", async (req, res) => {
 });
 
 /**
+ * GET /api/spotify/artist/:artistId/tracks
+ * Returns all top tracks for a given artist (no filtering)
+ */
+router.get("/artist/:artistId/tracks", async (req, res) => {
+  const artistId = req.params.artistId;
+
+  if (!artistId) {
+    return res.status(400).json({ error: "artistId is required" });
+  }
+
+  try {
+    const token = await getSpotifyToken();
+
+    // Spotify API: get artist's top tracks (US market)
+    const spotifyRes = await fetch(
+      `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=US`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!spotifyRes.ok) {
+      throw new Error(`Spotify API error: ${spotifyRes.status}`);
+    }
+
+    const data = await spotifyRes.json();
+
+    // Return all tracks without filtering
+    const tracks = data.tracks.map(track => ({
+      id: track.id,
+      name: track.name,
+      album: track.album.name,
+      preview_url: track.preview_url
+    }));
+
+    res.json(tracks);
+  } catch (err) {
+    console.error("Spotify artist tracks error:", err);
+    res.status(500).json({ error: "Failed to fetch tracks from Spotify" });
+  }
+});
+
+/**
  * GET /api/spotify/track/:trackId
  * Returns full track metadata including album image and artist followers
  */
