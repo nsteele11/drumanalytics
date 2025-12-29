@@ -235,10 +235,11 @@ async function deleteVideo(s3Key, cardElement, trackName, artistName) {
         return;
     }
 
-    const deleteBtn = cardElement.querySelector('.delete-video-btn');
-    const originalText = deleteBtn.textContent;
-    deleteBtn.disabled = true;
-    deleteBtn.textContent = 'Deleting...';
+    const deleteBtn = cardElement.querySelector('.delete-video-btn-x');
+    if (deleteBtn) {
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = '...';
+    }
 
     try {
         const response = await fetch(`/api/videos/${encodeURIComponent(s3Key)}`, {
@@ -270,8 +271,10 @@ async function deleteVideo(s3Key, cardElement, trackName, artistName) {
     } catch (err) {
         alert(`Error deleting video: ${err.message}`);
         console.error('Error deleting video:', err);
-        deleteBtn.disabled = false;
-        deleteBtn.textContent = originalText;
+        if (deleteBtn) {
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = '×';
+        }
     }
 }
 
