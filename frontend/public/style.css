@@ -585,6 +585,19 @@ input[type="file"] {
     font-size: 18px;
 }
 
+.clickable-artist {
+    color: #1db954;
+    text-decoration: none;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s, text-decoration 0.2s;
+}
+
+.clickable-artist:hover {
+    color: #1ed760;
+    text-decoration: underline;
+}
+
 @media (max-width: 768px) {
     .genre-search-field input[type="text"] {
         max-width: 100%;

@@ -515,11 +515,19 @@ async function loadGenreData(genre) {
                 
                 row.innerHTML = `
                     <td>${index + 1}</td>
-                    <td>${escapeHtml(artist.name)}</td>
+                    <td><a href="#" class="clickable-artist" data-artist-id="${artist.id}" data-artist-name="${escapeHtml(artist.name)}">${escapeHtml(artist.name)}</a></td>
                     <td>${artist.followers.toLocaleString()}</td>
                     <td>${artist.popularity}</td>
                     <td>${escapeHtml(genres)}</td>
                 `;
+                
+                // Add click handler for artist name
+                const artistLink = row.querySelector('.clickable-artist');
+                artistLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    selectArtistForAnalysis(artist.id, artist.name);
+                });
+                
                 topArtistsTableBody.appendChild(row);
             });
         } else {
@@ -533,11 +541,21 @@ async function loadGenreData(genre) {
                 row.innerHTML = `
                     <td>${index + 1}</td>
                     <td>${escapeHtml(track.name)}</td>
-                    <td>${escapeHtml(track.artist)}</td>
+                    <td><a href="#" class="clickable-artist" data-artist-id="${track.artistId || ''}" data-artist-name="${escapeHtml(track.artist)}">${escapeHtml(track.artist)}</a></td>
                     <td>${track.popularity}</td>
                     <td>${escapeHtml(track.album || 'N/A')}</td>
                     <td>${escapeHtml(track.releaseDate || 'N/A')}</td>
                 `;
+                
+                // Add click handler for artist name (if artistId is available)
+                if (track.artistId) {
+                    const artistLink = row.querySelector('.clickable-artist');
+                    artistLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        selectArtistForAnalysis(track.artistId, track.artist);
+                    });
+                }
+                
                 topTracksTableBody.appendChild(row);
             });
         } else {
@@ -630,6 +648,23 @@ async function loadArtistPopularTracks(artistId) {
         alert(`Error loading artist tracks: ${err.message}`);
         console.error('Error loading artist tracks:', err);
     }
+}
+
+/* -----------------------------
+   SELECT ARTIST FOR ANALYSIS
+--------------------------------*/
+function selectArtistForAnalysis(artistId, artistName) {
+    // Set the artist in the artist analysis search field
+    artistAnalysisSearchInput.value = artistName;
+    
+    // Clear the search results dropdown
+    artistAnalysisResults.innerHTML = '';
+    
+    // Scroll to the artist analysis section
+    document.querySelector('.artist-analysis-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Trigger the search automatically
+    loadArtistPopularTracks(artistId);
 }
 </script>
 
