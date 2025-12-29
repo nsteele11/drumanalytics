@@ -137,6 +137,23 @@ router.get("/track/:trackId", async (req, res) => {
 
     const artistData = await artistRes.json();
 
+    // Fetch audio features for the track
+    const audioFeaturesRes = await fetch(
+      `https://api.spotify.com/v1/audio-features/${trackId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    let audioFeatures = null;
+    if (audioFeaturesRes.ok) {
+      audioFeatures = await audioFeaturesRes.json();
+    } else {
+      console.warn(`Failed to fetch audio features: ${audioFeaturesRes.status}`);
+    }
+
     // Format response to match what frontend expects
     const response = {
       artist: {
@@ -153,7 +170,23 @@ router.get("/track/:trackId", async (req, res) => {
         popularity: trackData.popularity,
         duration_ms: trackData.duration_ms,
         album_image_url: trackData.album.images[0]?.url || null
-      }
+      },
+      audio_features: audioFeatures ? {
+        danceability: audioFeatures.danceability,
+        energy: audioFeatures.energy,
+        key: audioFeatures.key,
+        loudness: audioFeatures.loudness,
+        mode: audioFeatures.mode,
+        speechiness: audioFeatures.speechiness,
+        acousticness: audioFeatures.acousticness,
+        instrumentalness: audioFeatures.instrumentalness,
+        liveness: audioFeatures.liveness,
+        valence: audioFeatures.valence,
+        tempo: audioFeatures.tempo,
+        time_signature: audioFeatures.time_signature,
+        duration_ms: audioFeatures.duration_ms,
+        id: audioFeatures.id
+      } : null
     };
 
     res.json(response);

@@ -62,6 +62,61 @@
                         <span id="trackPopularity">-</span>
                     </div>
                 </div>
+                
+                <!-- AUDIO FEATURES -->
+                <div id="audioFeaturesSection" class="audio-features-section" style="display:none;">
+                    <h4>Audio Features</h4>
+                    <div class="audio-features-grid">
+                        <div class="audio-feature">
+                            <strong>Danceability:</strong>
+                            <span id="audioDanceability">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Energy:</strong>
+                            <span id="audioEnergy">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Tempo:</strong>
+                            <span id="audioTempo">-</span> BPM
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Key:</strong>
+                            <span id="audioKey">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Loudness:</strong>
+                            <span id="audioLoudness">-</span> dB
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Mode:</strong>
+                            <span id="audioMode">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Speechiness:</strong>
+                            <span id="audioSpeechiness">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Acousticness:</strong>
+                            <span id="audioAcousticness">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Instrumentalness:</strong>
+                            <span id="audioInstrumentalness">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Liveness:</strong>
+                            <span id="audioLiveness">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Valence:</strong>
+                            <span id="audioValence">-</span>
+                        </div>
+                        <div class="audio-feature">
+                            <strong>Time Signature:</strong>
+                            <span id="audioTimeSignature">-</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -156,6 +211,46 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
                 albumCoverImg.style.display = 'block';
             } else {
                 albumCoverImg.style.display = 'none';
+            }
+
+            // Display audio features
+            const audioFeatures = spotifyMetadata.audio_features;
+            const audioFeaturesSection = document.getElementById('audioFeaturesSection');
+            if (audioFeatures) {
+                audioFeaturesSection.style.display = 'block';
+
+                // Helper function to format 0-1 scores as percentages
+                const formatScore = (value) => {
+                    return value !== null && value !== undefined ? (value * 100).toFixed(1) + '%' : '-';
+                };
+
+                // Helper function to convert key number to musical key name
+                const getKeyName = (key, mode) => {
+                    if (key === null || key === undefined || key === -1) return 'Unknown';
+                    const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                    const modeText = mode === 1 ? 'major' : 'minor';
+                    return keys[key] + ' ' + modeText;
+                };
+
+                // Helper function to format tempo
+                const formatTempo = (value) => {
+                    return value !== null && value !== undefined ? value.toFixed(1) : '-';
+                };
+
+                document.getElementById('audioDanceability').textContent = formatScore(audioFeatures.danceability);
+                document.getElementById('audioEnergy').textContent = formatScore(audioFeatures.energy);
+                document.getElementById('audioTempo').textContent = formatTempo(audioFeatures.tempo);
+                document.getElementById('audioKey').textContent = getKeyName(audioFeatures.key, audioFeatures.mode);
+                document.getElementById('audioLoudness').textContent = audioFeatures.loudness !== null && audioFeatures.loudness !== undefined ? audioFeatures.loudness.toFixed(1) : '-';
+                document.getElementById('audioMode').textContent = audioFeatures.mode === 1 ? 'Major' : (audioFeatures.mode === 0 ? 'Minor' : '-');
+                document.getElementById('audioSpeechiness').textContent = formatScore(audioFeatures.speechiness);
+                document.getElementById('audioAcousticness').textContent = formatScore(audioFeatures.acousticness);
+                document.getElementById('audioInstrumentalness').textContent = formatScore(audioFeatures.instrumentalness);
+                document.getElementById('audioLiveness').textContent = formatScore(audioFeatures.liveness);
+                document.getElementById('audioValence').textContent = formatScore(audioFeatures.valence);
+                document.getElementById('audioTimeSignature').textContent = audioFeatures.time_signature !== null && audioFeatures.time_signature !== undefined ? audioFeatures.time_signature : '-';
+            } else {
+                audioFeaturesSection.style.display = 'none';
             }
         };
         trackResults.appendChild(li);

@@ -122,6 +122,47 @@ input[type="file"] {
     font-weight: 500;
 }
 
+.audio-features-section {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.audio-features-section h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 16px;
+}
+
+.audio-features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.audio-feature {
+    padding: 8px;
+    background-color: #fff;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+    font-size: 13px;
+}
+
+.audio-feature strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #333;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.audio-feature span {
+    color: #555;
+    font-weight: 500;
+    font-size: 14px;
+}
+
 @media (max-width: 768px) {
     .upload-container {
         flex-direction: column;
@@ -130,5 +171,9 @@ input[type="file"] {
     .additional-metadata {
         flex: 1;
         width: 100%;
+    }
+    
+    .audio-features-grid {
+        grid-template-columns: 1fr;
     }
 }

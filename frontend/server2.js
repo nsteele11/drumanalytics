@@ -128,6 +128,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
             popularity: spotifyData.track.popularity,
             duration_ms: spotifyData.track.duration_ms,
           },
+          audio_features: spotifyData.audio_features || null,
         }
       : null;
 
