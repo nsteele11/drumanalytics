@@ -101,6 +101,9 @@ function createVideoCard(video) {
 
     card.innerHTML = `
         <div class="video-card-content">
+            <button class="delete-video-btn-x" data-s3key="${escapeHtml(video.s3Key)}" title="Delete video">
+                ×
+            </button>
             <div class="video-album-section">
                 ${albumCover}
                 ${videoSnapshot}
@@ -143,9 +146,6 @@ function createVideoCard(video) {
                     <button class="suggest-hashtags-btn" data-s3key="${escapeHtml(video.s3Key)}">
                         Suggest #s
                     </button>
-                    <button class="delete-video-btn" data-s3key="${escapeHtml(video.s3Key)}">
-                        🗑️ Delete
-                    </button>
                 </div>
             </div>
         </div>
@@ -169,8 +169,8 @@ function createVideoCard(video) {
         await openHashtagSuggestionsModal(video);
     });
 
-    // Add click handler for delete button
-    const deleteBtn = card.querySelector('.delete-video-btn');
+    // Add click handler for delete button (X in top right)
+    const deleteBtn = card.querySelector('.delete-video-btn-x');
     deleteBtn.addEventListener('click', async () => {
         await deleteVideo(video.s3Key, card, video.trackName, video.artistName);
     });
