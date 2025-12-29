@@ -92,7 +92,8 @@ router.get("/search/tracks", async (req, res) => {
 
 /**
  * GET /api/spotify/artist/:artistId/tracks
- * Returns all top tracks for a given artist (no filtering)
+ * Returns all tracks for a given artist using search API with pagination
+ * This gets more tracks than the top-tracks endpoint (which only returns ~10)
  */
 router.get("/artist/:artistId/tracks", async (req, res) => {
   const artistId = req.params.artistId;
@@ -104,9 +105,9 @@ router.get("/artist/:artistId/tracks", async (req, res) => {
   try {
     const token = await getSpotifyToken();
 
-    // Spotify API: get artist's top tracks (US market)
-    const spotifyRes = await fetch(
-      `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=US`,
+    // First, get the artist name to search for tracks
+    const artistRes = await fetch(
+      `https://api.spotify.com/v1/artists/${artistId}`,
       {
         headers: {
           Authorization: `Bearer ${token}`
@@ -114,21 +115,71 @@ router.get("/artist/:artistId/tracks", async (req, res) => {
       }
     );
 
-    if (!spotifyRes.ok) {
-      throw new Error(`Spotify API error: ${spotifyRes.status}`);
+    if (!artistRes.ok) {
+      throw new Error(`Failed to get artist: ${artistRes.status}`);
     }
 
-    const data = await spotifyRes.json();
+    const artistData = await artistRes.json();
+    const artistName = artistData.name;
 
-    // Return all tracks without filtering
-    const tracks = data.tracks.map(track => ({
-      id: track.id,
-      name: track.name,
-      album: track.album.name,
-      preview_url: track.preview_url
-    }));
+    // Search for tracks by this artist using search API
+    // Use pagination to get more results (up to 200 tracks)
+    let allTracks = [];
+    let offset = 0;
+    const limit = 50; // Max per request
+    const maxTracks = 200; // Limit total to avoid too many API calls
 
-    res.json(tracks);
+    while (offset < maxTracks) {
+      const searchRes = await fetch(
+        `https://api.spotify.com/v1/search?q=artist:"${encodeURIComponent(artistName)}"&type=track&limit=${limit}&offset=${offset}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!searchRes.ok) {
+        console.warn(`Failed to fetch tracks at offset ${offset}: ${searchRes.status}`);
+        break;
+      }
+
+      const searchData = await searchRes.json();
+      const tracks = searchData.tracks.items;
+
+      if (tracks.length === 0) {
+        break; // No more tracks
+      }
+
+      // Filter to only tracks where this artist is the primary artist
+      const artistTracks = tracks
+        .filter(track => track.artists.some(artist => artist.id === artistId))
+        .map(track => ({
+          id: track.id,
+          name: track.name,
+          album: track.album.name,
+          preview_url: track.preview_url
+        }));
+
+      allTracks = [...allTracks, ...artistTracks];
+
+      // If we got fewer than limit, we've reached the end
+      if (tracks.length < limit) {
+        break;
+      }
+
+      offset += limit;
+    }
+
+    // Remove duplicates (same track ID)
+    const uniqueTracks = Array.from(
+      new Map(allTracks.map(track => [track.id, track])).values()
+    );
+
+    // Sort by track name for easier browsing
+    uniqueTracks.sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json(uniqueTracks);
   } catch (err) {
     console.error("Spotify artist tracks error:", err);
     res.status(500).json({ error: "Failed to fetch tracks from Spotify" });
