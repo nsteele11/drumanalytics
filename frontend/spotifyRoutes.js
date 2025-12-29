@@ -297,7 +297,8 @@ router.get("/genre/artists", async (req, res) => {
 
 /**
  * GET /api/spotify/genre/tracks?genre=hip%20hop
- * Returns top 40 tracks by popularity for a given genre
+ * Returns top 100 tracks by popularity for a given genre
+ * Uses pagination to fetch tracks 1-50 and 51-100
  */
 router.get("/genre/tracks", async (req, res) => {
   const genre = req.query.genre;
@@ -309,9 +310,9 @@ router.get("/genre/tracks", async (req, res) => {
   try {
     const token = await getSpotifyToken();
 
-    // Search for tracks with the genre filter
-    const spotifyRes = await fetch(
-      `https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(genre)}"&type=track&limit=50`,
+    // Fetch first 50 tracks (offset 0)
+    const firstPageRes = await fetch(
+      `https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(genre)}"&type=track&limit=50&offset=0`,
       {
         headers: {
           Authorization: `Bearer ${token}`
@@ -319,14 +320,34 @@ router.get("/genre/tracks", async (req, res) => {
       }
     );
 
-    if (!spotifyRes.ok) {
-      throw new Error(`Spotify API error: ${spotifyRes.status}`);
+    if (!firstPageRes.ok) {
+      throw new Error(`Spotify API error: ${firstPageRes.status}`);
     }
 
-    const data = await spotifyRes.json();
+    const firstPageData = await firstPageRes.json();
+    let allTracks = [...firstPageData.tracks.items];
 
-    // Map and sort by popularity (descending)
-    const results = data.tracks.items
+    // Fetch next 50 tracks (offset 50) if available
+    if (firstPageData.tracks.total > 50) {
+      const secondPageRes = await fetch(
+        `https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(genre)}"&type=track&limit=50&offset=50`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (secondPageRes.ok) {
+        const secondPageData = await secondPageRes.json();
+        allTracks = [...allTracks, ...secondPageData.tracks.items];
+      } else {
+        console.warn(`Failed to fetch second page of tracks: ${secondPageRes.status}`);
+      }
+    }
+
+    // Map and sort by popularity (descending), then take top 100
+    const results = allTracks
       .map(track => ({
         id: track.id,
         name: track.name,
@@ -339,7 +360,7 @@ router.get("/genre/tracks", async (req, res) => {
         durationMs: track.duration_ms
       }))
       .sort((a, b) => b.popularity - a.popularity)
-      .slice(0, 40); // Top 40
+      .slice(0, 100); // Top 100
 
     res.json(results);
   } catch (err) {
