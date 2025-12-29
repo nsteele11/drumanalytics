@@ -283,8 +283,9 @@ function detectEnergyWithAubio(audioPath) {
         const rmsDb = parseFloat(match[1]);
         resolve(Math.round(rmsDb * 10) / 10);
       } else {
-      reject(new Error("Could not parse energy level"));
-    }
+        reject(new Error("Could not parse energy level"));
+      }
+    });
   });
 }
 
@@ -296,8 +297,21 @@ function analyzeShockValue(audioPath) {
   return new Promise(async (resolve, reject) => {
     try {
       // Get detailed onset timestamps
-      const onsetData = await getDetailedOnsets(audioPath);
-      if (!onsetData || onsetData.onsets.length < 2) {
+      let onsetData;
+      try {
+        onsetData = await getDetailedOnsets(audioPath);
+      } catch (onsetError) {
+        console.log("Onset detection failed for shock analysis:", onsetError.message);
+        resolve({
+          tempoSpikes: 0,
+          volumeSpikes: 0,
+          unusualPatterns: 0,
+          shockValue: 0
+        });
+        return;
+      }
+
+      if (!onsetData || !onsetData.onsets || onsetData.onsets.length < 3) {
         resolve({
           tempoSpikes: 0,
           volumeSpikes: 0,
@@ -313,16 +327,38 @@ function analyzeShockValue(audioPath) {
         energyData = await getEnergyOverTime(audioPath);
       } catch (energyError) {
         console.log("Energy analysis failed, using fallback:", energyError.message);
+        energyData = { energyValues: [], useFallback: true };
       }
       
       // Analyze tempo spikes (fills) - sudden decreases in onset intervals
-      const tempoSpikes = detectTempoSpikes(onsetData.onsets);
+      let tempoSpikes = 0;
+      try {
+        tempoSpikes = detectTempoSpikes(onsetData.onsets);
+        if (isNaN(tempoSpikes) || !isFinite(tempoSpikes)) tempoSpikes = 0;
+      } catch (error) {
+        console.log("Tempo spike detection failed:", error.message);
+        tempoSpikes = 0;
+      }
       
       // Analyze volume spikes (accents) - sudden increases in energy
-      const volumeSpikes = detectVolumeSpikes(energyData);
+      let volumeSpikes = 0;
+      try {
+        volumeSpikes = detectVolumeSpikes(energyData);
+        if (isNaN(volumeSpikes) || !isFinite(volumeSpikes)) volumeSpikes = 0;
+      } catch (error) {
+        console.log("Volume spike detection failed:", error.message);
+        volumeSpikes = 0;
+      }
       
       // Analyze unusual patterns (complex hits, odd timing) - high variance in intervals
-      const unusualPatterns = detectUnusualPatterns(onsetData.onsets);
+      let unusualPatterns = 0;
+      try {
+        unusualPatterns = detectUnusualPatterns(onsetData.onsets);
+        if (isNaN(unusualPatterns) || !isFinite(unusualPatterns)) unusualPatterns = 0;
+      } catch (error) {
+        console.log("Unusual pattern detection failed:", error.message);
+        unusualPatterns = 0;
+      }
       
       // Calculate shock value score (0-100)
       // If energy data isn't available, adjust weights: tempo spikes 40%, unusual patterns 60%
@@ -330,20 +366,27 @@ function analyzeShockValue(audioPath) {
         ? { tempo: 0.4, volume: 0.0, unusual: 0.6 }
         : { tempo: 0.3, volume: 0.3, unusual: 0.4 };
       
-      const shockValue = Math.min(100, Math.round(
+      const shockValue = Math.min(100, Math.max(0, Math.round(
         (tempoSpikes * weights.tempo) + 
         (volumeSpikes * weights.volume) + 
         (unusualPatterns * weights.unusual)
-      ));
+      )));
 
       resolve({
-        tempoSpikes: Math.round(tempoSpikes * 10) / 10,
-        volumeSpikes: Math.round(volumeSpikes * 10) / 10,
-        unusualPatterns: Math.round(unusualPatterns * 10) / 10,
+        tempoSpikes: Math.round(Math.max(0, Math.min(100, tempoSpikes)) * 10) / 10,
+        volumeSpikes: Math.round(Math.max(0, Math.min(100, volumeSpikes)) * 10) / 10,
+        unusualPatterns: Math.round(Math.max(0, Math.min(100, unusualPatterns)) * 10) / 10,
         shockValue: shockValue
       });
     } catch (error) {
-      reject(error);
+      console.error("Shock value analysis error:", error);
+      // Return default values instead of rejecting to prevent upload failure
+      resolve({
+        tempoSpikes: 0,
+        volumeSpikes: 0,
+        unusualPatterns: 0,
+        shockValue: 0
+      });
     }
   });
 }
@@ -419,38 +462,53 @@ function getEnergyOverTime(audioPath) {
  * Returns score 0-100
  */
 function detectTempoSpikes(onsets) {
-  if (onsets.length < 3) return 0;
+  if (!onsets || onsets.length < 3) return 0;
 
-  // Calculate intervals between onsets
-  const intervals = [];
-  for (let i = 1; i < onsets.length; i++) {
-    intervals.push(onsets[i] - onsets[i - 1]);
-  }
-
-  if (intervals.length < 2) return 0;
-
-  // Calculate average interval
-  const avgInterval = intervals.reduce((sum, i) => sum + i, 0) / intervals.length;
-
-  // Detect spikes: intervals that are significantly shorter than average (fills)
-  let spikeCount = 0;
-  let totalSpikeIntensity = 0;
-
-  intervals.forEach(interval => {
-    // If interval is less than 60% of average, it's a tempo spike
-    if (interval < avgInterval * 0.6 && avgInterval > 0) {
-      spikeCount++;
-      // Calculate intensity: how much faster than average (0-100 scale)
-      const intensity = Math.min(100, ((avgInterval - interval) / avgInterval) * 200);
-      totalSpikeIntensity += intensity;
+  try {
+    // Calculate intervals between onsets
+    const intervals = [];
+    for (let i = 1; i < onsets.length; i++) {
+      const interval = onsets[i] - onsets[i - 1];
+      if (interval > 0 && isFinite(interval)) {
+        intervals.push(interval);
+      }
     }
-  });
 
-  // Score based on spike frequency and intensity
-  const spikeFrequency = (spikeCount / intervals.length) * 100;
-  const avgIntensity = spikeCount > 0 ? totalSpikeIntensity / spikeCount : 0;
-  
-  return Math.min(100, (spikeFrequency * 0.5) + (avgIntensity * 0.5));
+    if (intervals.length < 2) return 0;
+
+    // Calculate average interval
+    const avgInterval = intervals.reduce((sum, i) => sum + i, 0) / intervals.length;
+    
+    if (!isFinite(avgInterval) || avgInterval <= 0) return 0;
+
+    // Detect spikes: intervals that are significantly shorter than average (fills)
+    let spikeCount = 0;
+    let totalSpikeIntensity = 0;
+
+    intervals.forEach(interval => {
+      // If interval is less than 60% of average, it's a tempo spike
+      if (interval < avgInterval * 0.6 && avgInterval > 0) {
+        spikeCount++;
+        // Calculate intensity: how much faster than average (0-100 scale)
+        const intensity = Math.min(100, Math.max(0, ((avgInterval - interval) / avgInterval) * 200));
+        if (isFinite(intensity)) {
+          totalSpikeIntensity += intensity;
+        }
+      }
+    });
+
+    if (spikeCount === 0 || intervals.length === 0) return 0;
+
+    // Score based on spike frequency and intensity
+    const spikeFrequency = (spikeCount / intervals.length) * 100;
+    const avgIntensity = totalSpikeIntensity / spikeCount;
+    
+    const score = Math.min(100, Math.max(0, (spikeFrequency * 0.5) + (avgIntensity * 0.5)));
+    return isFinite(score) ? score : 0;
+  } catch (error) {
+    console.error("Error in detectTempoSpikes:", error);
+    return 0;
+  }
 }
 
 /**
@@ -499,37 +557,50 @@ function detectVolumeSpikes(energyData) {
  * Returns score 0-100
  */
 function detectUnusualPatterns(onsets) {
-  if (onsets.length < 3) return 0;
+  if (!onsets || onsets.length < 3) return 0;
 
-  // Calculate intervals between onsets
-  const intervals = [];
-  for (let i = 1; i < onsets.length; i++) {
-    intervals.push(onsets[i] - onsets[i - 1]);
+  try {
+    // Calculate intervals between onsets
+    const intervals = [];
+    for (let i = 1; i < onsets.length; i++) {
+      const interval = onsets[i] - onsets[i - 1];
+      if (interval > 0 && isFinite(interval)) {
+        intervals.push(interval);
+      }
+    }
+
+    if (intervals.length < 2) return 0;
+
+    // Calculate coefficient of variation (CV) = std dev / mean
+    // Higher CV = more irregular timing
+    const avgInterval = intervals.reduce((sum, i) => sum + i, 0) / intervals.length;
+    
+    if (!isFinite(avgInterval) || avgInterval <= 0) return 0;
+    
+    const variance = intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length;
+    const stdDev = Math.sqrt(variance);
+    
+    if (!isFinite(stdDev) || stdDev <= 0) return 0;
+    
+    const coefficientOfVariation = stdDev / avgInterval;
+    
+    if (!isFinite(coefficientOfVariation)) return 0;
+    
+    // Also check for polyrhythmic patterns (multiple interval lengths)
+    const uniqueIntervals = new Set(intervals.map(i => Math.round(i * 100) / 100));
+    const intervalDiversity = (uniqueIntervals.size / intervals.length) * 100;
+    
+    // Score combines CV and diversity (0-100 scale)
+    // CV of 0.3+ is considered unusual, scale to 100
+    const cvScore = Math.min(100, Math.max(0, (coefficientOfVariation / 0.3) * 100));
+    const diversityScore = Math.min(100, Math.max(0, intervalDiversity * 2));
+    
+    const score = Math.min(100, Math.max(0, (cvScore * 0.6) + (diversityScore * 0.4)));
+    return isFinite(score) ? score : 0;
+  } catch (error) {
+    console.error("Error in detectUnusualPatterns:", error);
+    return 0;
   }
-
-  if (intervals.length < 2) return 0;
-
-  // Calculate coefficient of variation (CV) = std dev / mean
-  // Higher CV = more irregular timing
-  const avgInterval = intervals.reduce((sum, i) => sum + i, 0) / intervals.length;
-  const variance = intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length;
-  const stdDev = Math.sqrt(variance);
-  
-  if (avgInterval === 0) return 0;
-  
-  const coefficientOfVariation = stdDev / avgInterval;
-  
-  // Also check for polyrhythmic patterns (multiple interval lengths)
-  const uniqueIntervals = new Set(intervals.map(i => Math.round(i * 100) / 100));
-  const intervalDiversity = (uniqueIntervals.size / intervals.length) * 100;
-  
-  // Score combines CV and diversity (0-100 scale)
-  // CV of 0.3+ is considered unusual, scale to 100
-  const cvScore = Math.min(100, (coefficientOfVariation / 0.3) * 100);
-  const diversityScore = Math.min(100, intervalDiversity * 2);
-  
-  return Math.min(100, (cvScore * 0.6) + (diversityScore * 0.4));
-});
 }
 
 /**
