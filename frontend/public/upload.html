@@ -183,6 +183,9 @@ document.getElementById('track-search').addEventListener('input', async (e) => {
             // Debug: log the metadata to see what we're receiving
             console.log('Spotify Metadata:', spotifyMetadata);
             console.log('Audio Features:', spotifyMetadata.audio_features);
+            if (spotifyMetadata.audio_features_error) {
+                console.error('Audio Features Error:', spotifyMetadata.audio_features_error);
+            }
 
             document.getElementById('metadataPreview').style.display = 'block';
             document.getElementById('artistMeta').innerHTML =

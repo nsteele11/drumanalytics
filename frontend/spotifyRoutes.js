@@ -139,6 +139,8 @@ router.get("/track/:trackId", async (req, res) => {
 
     // Fetch audio features for the track
     let audioFeatures = null;
+    let audioFeaturesErrorMsg = null;
+    
     try {
       console.log(`Attempting to fetch audio features for track: ${trackId}`);
       const audioFeaturesRes = await fetch(
@@ -158,34 +160,36 @@ router.get("/track/:trackId", async (req, res) => {
         
         // Check if the response has an error field (Spotify sometimes returns errors in the body)
         if (rawAudioFeatures.error) {
-          console.error('Spotify API error in response:', rawAudioFeatures.error);
+          const errorMsg = `Spotify API error: ${rawAudioFeatures.error.message || JSON.stringify(rawAudioFeatures.error)}`;
+          console.error(errorMsg);
+          audioFeaturesErrorMsg = errorMsg;
         } else if (rawAudioFeatures.danceability !== undefined) {
           audioFeatures = rawAudioFeatures;
           console.log('Audio features parsed successfully');
         } else {
-          console.warn('Audio features response missing expected data fields:', rawAudioFeatures);
+          const errorMsg = 'Audio features response missing expected data fields';
+          console.warn(errorMsg, rawAudioFeatures);
+          audioFeaturesErrorMsg = errorMsg;
         }
       } else {
         // Try to get error details
         try {
           const errorData = await audioFeaturesRes.json();
-          console.error(`Failed to fetch audio features for track ${trackId}:`, {
-            status: audioFeaturesRes.status,
-            statusText: audioFeaturesRes.statusText,
-            error: errorData
-          });
+          const errorMsg = `HTTP ${audioFeaturesRes.status}: ${errorData.error?.message || JSON.stringify(errorData)}`;
+          console.error(`Failed to fetch audio features for track ${trackId}:`, errorMsg);
+          audioFeaturesErrorMsg = errorMsg;
         } catch (parseError) {
           const errorText = await audioFeaturesRes.text();
-          console.error(`Failed to fetch audio features for track ${trackId}:`, {
-            status: audioFeaturesRes.status,
-            statusText: audioFeaturesRes.statusText,
-            responseText: errorText
-          });
+          const errorMsg = `HTTP ${audioFeaturesRes.status} ${audioFeaturesRes.statusText}: ${errorText}`;
+          console.error(`Failed to fetch audio features for track ${trackId}:`, errorMsg);
+          audioFeaturesErrorMsg = errorMsg;
         }
       }
     } catch (audioFeaturesError) {
+      const errorMsg = `Exception: ${audioFeaturesError.message}`;
       console.error('Exception while fetching audio features:', audioFeaturesError);
       console.error('Error stack:', audioFeaturesError.stack);
+      audioFeaturesErrorMsg = errorMsg;
     }
 
     // Format response to match what frontend expects
@@ -220,10 +224,14 @@ router.get("/track/:trackId", async (req, res) => {
         time_signature: audioFeatures.time_signature,
         duration_ms: audioFeatures.duration_ms,
         id: audioFeatures.id
-      } : null
+      } : null,
+      audio_features_error: audioFeaturesErrorMsg || (audioFeatures === null ? 'Audio features not available' : null)
     };
 
     console.log('Sending response with audio_features:', response.audio_features !== null ? 'present' : 'null');
+    if (response.audio_features_error) {
+      console.log('Audio features error:', response.audio_features_error);
+    }
     res.json(response);
   } catch (err) {
     console.error("Spotify track metadata error:", err);
