@@ -288,6 +288,12 @@ function getShockValueColor(score) {
 
 function formatDate(dateString) {
     if (!dateString) return 'N/A';
+    // If it's already in YYYY-MM-DD format, use it directly
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        const [year, month, day] = dateString.split('-');
+        return `${month}/${day}/${year}`;
+    }
+    // Otherwise, parse as date and format
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
         year: 'numeric', 
@@ -334,7 +340,7 @@ function openEditMetricsModal(video, cardElement) {
                 </div>
                 <div class="form-group">
                     <label>Posted Date</label>
-                    <input type="date" id="edit-posted-date" value="${video.postedDate ? new Date(video.postedDate).toISOString().split('T')[0] : ''}">
+                    <input type="date" id="edit-posted-date" value="${video.postedDate ? (video.postedDate.includes('T') ? new Date(video.postedDate).toISOString().split('T')[0] : video.postedDate.split('T')[0]) : ''}">
                 </div>
                 <div class="form-actions">
                     <button type="button" class="cancel-btn">Cancel</button>
@@ -372,7 +378,7 @@ function openEditMetricsModal(video, cardElement) {
             igLikes: document.getElementById('edit-ig-likes').value ? parseInt(document.getElementById('edit-ig-likes').value) : null,
             tiktokViews: document.getElementById('edit-tiktok-views').value ? parseInt(document.getElementById('edit-tiktok-views').value) : null,
             tiktokLikes: document.getElementById('edit-tiktok-likes').value ? parseInt(document.getElementById('edit-tiktok-likes').value) : null,
-            postedDate: postedDateValue ? new Date(postedDateValue).toISOString() : null,
+            postedDate: postedDateValue || null, // Store as YYYY-MM-DD string to avoid timezone issues
         };
         
         try {

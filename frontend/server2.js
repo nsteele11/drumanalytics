@@ -443,8 +443,29 @@ app.get("/api/videos", async (req, res) => {
 
     // Sort by posted date (newest first), fallback to upload timestamp if no posted date
     videos.sort((a, b) => {
-      const aDate = a.postedDate ? new Date(a.postedDate).getTime() : (a.uploadTimestamp || 0);
-      const bDate = b.postedDate ? new Date(b.postedDate).getTime() : (b.uploadTimestamp || 0);
+      let aDate, bDate;
+      
+      if (a.postedDate) {
+        // If it's in YYYY-MM-DD format, parse it as local date to avoid timezone issues
+        if (/^\d{4}-\d{2}-\d{2}$/.test(a.postedDate)) {
+          aDate = new Date(a.postedDate + 'T12:00:00').getTime(); // Use noon to avoid timezone edge cases
+        } else {
+          aDate = new Date(a.postedDate).getTime();
+        }
+      } else {
+        aDate = a.uploadTimestamp || 0;
+      }
+      
+      if (b.postedDate) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(b.postedDate)) {
+          bDate = new Date(b.postedDate + 'T12:00:00').getTime();
+        } else {
+          bDate = new Date(b.postedDate).getTime();
+        }
+      } else {
+        bDate = b.uploadTimestamp || 0;
+      }
+      
       return bDate - aDate;
     });
 
