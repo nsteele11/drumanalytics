@@ -807,24 +807,39 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
   // Generate base hashtags (only from current video's metadata)
   const baseHashtags = generateBaseHashtags(artistName, trackName, genres);
 
-  // Generate Instagram recommendations
-  const instagramSuggestions = generatePlatformSuggestions(
+  // Get previous hashtag sets for variation calculation
+  const previousHashtagSets = [];
+  allVideos.forEach(video => {
+    if (video.s3Key === currentVideo.s3Key) return;
+    if (video.igHashtags) {
+      const tags = extractHashtags(video.igHashtags).map(t => t.toLowerCase());
+      if (tags.length > 0) {
+        previousHashtagSets.push(new Set(tags));
+      }
+    }
+  });
+
+  // Generate Instagram recommendations with improved algorithm
+  const instagramSuggestions = generateInstagramSuggestions(
     baseHashtags,
     hashtagPerformance,
     otherArtistNames,
     genres,
-    'instagram',
-    15
+    artistName,
+    trackName,
+    previousHashtagSets
   );
 
-  // Generate TikTok recommendations
-  const tiktokSuggestions = generatePlatformSuggestions(
+  // Generate TikTok recommendations with improved algorithm
+  const videoType = currentVideo.videoType || null;
+  const tiktokSuggestions = generateTikTokSuggestions(
     baseHashtags,
     hashtagPerformance,
     otherArtistNames,
     genres,
-    'tiktok',
-    15
+    artistName,
+    trackName,
+    videoType
   );
 
   return {
@@ -888,6 +903,620 @@ function normalizeForHashtag(text) {
     .replace(/[^a-z0-9\s]/g, '') // Remove special characters
     .replace(/\s+/g, '') // Remove spaces
     .substring(0, 30); // Limit length
+}
+
+// ----------------------
+// Hashtag Volume Categories (Instagram post counts)
+// ----------------------
+// High-volume: >1M posts
+// Medium-volume: 100k-1M posts
+// Niche: <100k posts
+const HASHTAG_VOLUMES = {
+  // High-volume hashtags (>1M posts)
+  high: new Set([
+    'drumming', 'drummer', 'drums', 'music', 'musician', 'musicians',
+    'drumcover', 'musicvideo', 'livemusic', 'rockmusic', 'musiclover',
+    'instamusic', 'musicproducer', 'drumlife', 'drummerlife'
+  ]),
+  // Medium-volume hashtags (100k-1M posts)
+  medium: new Set([
+    'drumvideo', 'drumbeat', 'drummingvideo', 'drumtutorial',
+    'drumcovers', 'drumminglife', 'drumset', 'drumkit', 'drumstudio',
+    'musicproduction', 'musicianlife', 'cover', 'coversong', 'musiccovers',
+    'rockmusic', 'metal', 'progressiverock', 'jazz', 'funkmusic'
+  ]),
+  // Niche hashtags (<100k posts)
+  niche: new Set([
+    'drumfill', 'drumfills', 'doublekick', 'blastbeat', 'drumgroove',
+    'drummingtechnique', 'drumlessons', 'drumminglessons', 'drumteacher',
+    'electronicdrums', 'acousticdrums', 'snaredrum', 'bassdrum',
+    'cymbals', 'drumsticks', 'drummersofinstagram', 'drummerslife'
+  ])
+};
+
+// Get volume category for a hashtag
+function getHashtagVolume(tag) {
+  const tagLower = tag.toLowerCase().replace('#', '');
+  if (HASHTAG_VOLUMES.high.has(tagLower)) return 'high';
+  if (HASHTAG_VOLUMES.medium.has(tagLower)) return 'medium';
+  if (HASHTAG_VOLUMES.niche.has(tagLower)) return 'niche';
+  // Default: assume medium if unknown (can be improved with API calls)
+  return 'medium';
+}
+
+// Calculate Jaccard similarity between two sets
+function jaccardSimilarity(set1, set2) {
+  if (set1.size === 0 && set2.size === 0) return 1;
+  if (set1.size === 0 || set2.size === 0) return 0;
+  
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const union = new Set([...set1, ...set2]);
+  
+  return intersection.size / union.size;
+}
+
+// Check if a hashtag set has sufficient variation from previous posts
+function hasSufficientVariation(proposedSet, previousSets, threshold = 0.7) {
+  if (previousSets.length === 0) return true;
+  
+  for (const prevSet of previousSets) {
+    const similarity = jaccardSimilarity(proposedSet, prevSet);
+    if (similarity >= threshold) {
+      return false; // Too similar to a previous post
+    }
+  }
+  return true; // Sufficient variation
+}
+
+// Generate Instagram hashtag suggestions with improved algorithm
+function generateInstagramSuggestions(
+  baseHashtags,
+  hashtagPerformance,
+  otherArtistNames,
+  genres,
+  artistName,
+  trackName,
+  previousHashtagSets
+) {
+  const suggestions = [];
+  const usedTags = new Set();
+  
+  // Track volume categories
+  let highCount = 0;
+  let mediumCount = 0;
+  let nicheCount = 0;
+  
+  // Target counts: 1-2 high, 3-5 medium, 1-2 niche (total 7-12)
+  const targetHigh = Math.min(2, 1);
+  const targetMedium = 4; // Aim for 4 medium hashtags
+  const targetNiche = 2; // At least 1, aim for 2
+  const targetTotal = 10; // Aim for 10 hashtags (within 7-12 range)
+  
+  // Priority 1: Always include band name and song name cleanly
+  const bandTag = baseHashtags.find(h => h.source === 'band');
+  if (bandTag && artistName) {
+    const cleanBandTag = `#${normalizeForHashtag(artistName)}`;
+    suggestions.push(cleanBandTag);
+    usedTags.add(cleanBandTag.toLowerCase());
+    // Band tags are typically niche unless very popular
+    nicheCount++;
+  }
+  
+  const trackTag = baseHashtags.find(h => h.source === 'track');
+  if (trackTag && trackName && trackName.length < 30) {
+    const cleanTrackTag = `#${normalizeForHashtag(trackName)}`;
+    if (!usedTags.has(cleanTrackTag.toLowerCase())) {
+      suggestions.push(cleanTrackTag);
+      usedTags.add(cleanTrackTag.toLowerCase());
+      // Track tags are typically niche unless very popular
+      nicheCount++;
+    }
+  }
+  
+  // Priority 2: Highly impactful drum-related hashtags (always prioritize these)
+  const drumTags = [
+    { tag: '#drummer', volume: 'high' },
+    { tag: '#drumming', volume: 'high' },
+    { tag: '#drums', volume: 'high' },
+    { tag: '#drumcover', volume: 'high' },
+    { tag: '#drumvideo', volume: 'medium' },
+    { tag: '#drumbeat', volume: 'medium' },
+    { tag: '#drumminglife', volume: 'medium' },
+    { tag: '#drummingvideo', volume: 'medium' },
+    { tag: '#drumfills', volume: 'niche' },
+    { tag: '#drumgroove', volume: 'niche' },
+    { tag: '#drummingtechnique', volume: 'niche' }
+  ];
+  
+  // Score all potential hashtags including drum tags
+  const scoredHashtags = [];
+  
+  // Score drum tags with high priority
+  drumTags.forEach(({ tag, volume }) => {
+    if (usedTags.has(tag.toLowerCase())) return;
+    
+    const perf = hashtagPerformance.get(tag.toLowerCase().replace('#', ''));
+    let score = 20; // Very high base score for drum tags
+    
+    // Boost based on volume category needs
+    if (volume === 'high' && highCount < targetHigh) score += 5;
+    if (volume === 'medium' && mediumCount < targetMedium) score += 5;
+    if (volume === 'niche' && nicheCount < targetNiche) score += 10; // Prioritize niche
+    
+    if (perf) {
+      const engagement = perf.igEngagement || 0;
+      score += Math.min(engagement / 10, 3);
+    }
+    
+    scoredHashtags.push({ tag, score, source: 'drum', volume });
+  });
+  
+  // Score other base hashtags (genre-based, general music tags)
+  baseHashtags.forEach(base => {
+    if (usedTags.has(base.tag.toLowerCase())) return;
+    
+    // Skip if it's already a drum tag we processed
+    if (drumTags.some(dt => dt.tag.toLowerCase() === base.tag.toLowerCase())) return;
+    
+    const volume = getHashtagVolume(base.tag);
+    const perf = hashtagPerformance.get(base.tag.toLowerCase().replace('#', ''));
+    let score = base.priority;
+    
+    // Boost based on volume category needs
+    if (volume === 'high' && highCount < targetHigh) score += 3;
+    if (volume === 'medium' && mediumCount < targetMedium) score += 3;
+    if (volume === 'niche' && nicheCount < targetNiche) score += 5;
+    
+    if (perf) {
+      const engagement = perf.igEngagement || 0;
+      score += Math.min(engagement / 10, 2);
+    }
+    
+    scoredHashtags.push({ tag: base.tag, score, source: base.source, volume });
+  });
+  
+  // Add historical high-performing hashtags
+  const generalMusicTags = [
+    'drumming', 'drummer', 'drums', 'music', 'musician',
+    'drumcover', 'drumvideo', 'drumlife', 'drummerlife',
+    'musicproduction', 'livemusic', 'rockmusic', 'musiclover',
+    'drumbeat', 'drummingvideo', 'drumtutorial',
+    'musicvideo', 'cover', 'coversong'
+  ];
+  
+  hashtagPerformance.forEach((perf, tag) => {
+    if (usedTags.has(tag)) return;
+    if (otherArtistNames.has(tag)) return;
+    if (!generalMusicTags.includes(tag)) return;
+    
+    const tagWithHash = `#${tag.replace('#', '')}`;
+    if (usedTags.has(tagWithHash.toLowerCase())) return;
+    
+    const volume = getHashtagVolume(tagWithHash);
+    const engagement = perf.igEngagement || 0;
+    
+    if (engagement > 0 || perf.igViews > 0) {
+      let score = 3;
+      score += Math.min(engagement / 10, 3);
+      
+      // Boost based on volume category needs
+      if (volume === 'high' && highCount < targetHigh) score += 2;
+      if (volume === 'medium' && mediumCount < targetMedium) score += 2;
+      if (volume === 'niche' && nicheCount < targetNiche) score += 4;
+      
+      scoredHashtags.push({ tag: tagWithHash, score, source: 'historical', volume });
+    }
+  });
+  
+  // Sort by score (highest first)
+  scoredHashtags.sort((a, b) => b.score - a.score);
+  
+  // Select hashtags to meet volume requirements
+  const candidates = scoredHashtags.filter(h => !usedTags.has(h.tag.toLowerCase()));
+  
+  // First, ensure we have at least one niche hashtag (requirement: always at least one niche)
+  if (nicheCount === 0) {
+    const nicheCandidate = candidates.find(h => h.volume === 'niche');
+    if (nicheCandidate) {
+      suggestions.push(nicheCandidate.tag);
+      usedTags.add(nicheCandidate.tag.toLowerCase());
+      nicheCount++;
+    }
+  }
+  
+  // Then, fill remaining slots prioritizing volume mix
+  while (suggestions.length < targetTotal && candidates.length > 0) {
+    let selected = null;
+    let maxScore = -1;
+    
+    // Prioritize candidates that help meet volume targets
+    for (const candidate of candidates) {
+      if (usedTags.has(candidate.tag.toLowerCase())) continue;
+      
+      // Check if adding this candidate helps meet volume targets
+      const wouldHigh = candidate.volume === 'high' ? highCount + 1 : highCount;
+      const wouldMedium = candidate.volume === 'medium' ? mediumCount + 1 : mediumCount;
+      const wouldNiche = candidate.volume === 'niche' ? nicheCount + 1 : nicheCount;
+      
+      // Prefer candidates that move us toward targets
+      let score = candidate.score;
+      if (candidate.volume === 'high' && wouldHigh < targetHigh) score += 10;
+      if (candidate.volume === 'medium' && wouldMedium < targetMedium) score += 8;
+      if (candidate.volume === 'niche' && wouldNiche < targetNiche) score += 12; // Prioritize niche
+      
+      // Avoid going too far over targets
+      if (candidate.volume === 'high' && wouldHigh > targetHigh) score -= 5;
+      if (candidate.volume === 'medium' && wouldMedium > targetMedium) score -= 3;
+      
+      if (score > maxScore) {
+        maxScore = score;
+        selected = candidate;
+      }
+    }
+    
+    if (!selected) break;
+    
+    // Check Jaccard similarity with previous posts before adding
+    const testSet = new Set([...suggestions.map(t => t.toLowerCase()), selected.tag.toLowerCase()]);
+    if (hasSufficientVariation(testSet, previousHashtagSets, 0.7)) {
+      suggestions.push(selected.tag);
+      usedTags.add(selected.tag.toLowerCase());
+      
+      if (selected.volume === 'high') highCount++;
+      else if (selected.volume === 'medium') mediumCount++;
+      else if (selected.volume === 'niche') nicheCount++;
+    } else {
+      // Skip this tag as it's too similar to previous posts
+      usedTags.add(selected.tag.toLowerCase()); // Mark as used so we don't try again
+    }
+  }
+  
+  // If we still don't have enough, fill without volume restrictions (but still check variation)
+  while (suggestions.length < 7 && candidates.length > 0) {
+    const remaining = candidates.find(h => !usedTags.has(h.tag.toLowerCase()));
+    if (!remaining) break;
+    
+    const testSet = new Set([...suggestions.map(t => t.toLowerCase()), remaining.tag.toLowerCase()]);
+    if (hasSufficientVariation(testSet, previousHashtagSets, 0.7)) {
+      suggestions.push(remaining.tag);
+      usedTags.add(remaining.tag.toLowerCase());
+      
+      // Update volume counters
+      if (remaining.volume === 'high') highCount++;
+      else if (remaining.volume === 'medium') mediumCount++;
+      else if (remaining.volume === 'niche') nicheCount++;
+    } else {
+      usedTags.add(remaining.tag.toLowerCase());
+    }
+  }
+  
+  // Ensure we have at least one niche hashtag (critical requirement)
+  if (nicheCount === 0 && suggestions.length > 0) {
+    // Find any niche candidate from all available
+    const allNiche = scoredHashtags.filter(h => h.volume === 'niche');
+    if (allNiche.length > 0) {
+      // Replace a less critical hashtag with a niche one
+      suggestions[suggestions.length - 1] = allNiche[0].tag;
+      nicheCount++;
+    }
+  }
+  
+  // Trim to optimal range (7-12)
+  return suggestions.slice(0, 12);
+}
+
+// ----------------------
+// TikTok Hashtag Categories
+// ----------------------
+// Broad discovery tags: High-volume tags that help with discovery
+// Niche identify tags: Specific tags that identify the content type
+// Generic tags: General tags like #music, #viral, etc. (max 1, exclude #fyp)
+// Video type tags: Tags based on videoType metadata
+const TIKTOK_BROAD_DISCOVERY = [
+  'drumming', 'drummer', 'drums', 'music', 'musician', 'musicians',
+  'musicvideo', 'livemusic', 'rockmusic', 'musiclover',
+  'drumcover', 'drumvideo', 'musicproducer'
+];
+
+const TIKTOK_NICHE_IDENTIFY = [
+  'drumbeat', 'drummingvideo', 'drumtutorial', 'drumfills',
+  'drumgroove', 'drummingtechnique', 'drummersoftiktok',
+  'drummerslife', 'doublekick', 'blastbeat', 'drumfill',
+  'drumlessons', 'drumminglessons', 'drumstudio'
+];
+
+const TIKTOK_GENERIC = [
+  'music', 'viral', 'trending', 'fyp' // Note: #fyp excluded
+];
+
+// Video type to hashtag mapping
+const VIDEO_TYPE_TAGS = {
+  'Solo Mix': ['drumsolo', 'solo', 'drumming', 'drumcover'],
+  'Collab': ['collab', 'drumcollab', 'collaboration', 'livemusic'],
+  'Live': ['livemusic', 'live', 'liveperformance', 'concert', 'drumminglive'],
+  'Original': ['original', 'originalmusic', 'originalcontent', 'oc'],
+  'Other': ['drumming', 'drumcover', 'music']
+};
+
+// Generate TikTok hashtag suggestions with improved algorithm
+function generateTikTokSuggestions(
+  baseHashtags,
+  hashtagPerformance,
+  otherArtistNames,
+  genres,
+  artistName,
+  trackName,
+  videoType
+) {
+  const suggestions = [];
+  const usedTags = new Set();
+  
+  // Track categories
+  let broadDiscoveryCount = 0;
+  let nicheIdentifyCount = 0;
+  let genericCount = 0;
+  
+  // Target: 3-6 hashtags total
+  const targetTotal = 5; // Aim for 5 hashtags
+  const minBroad = 1; // At least 1 broad discovery
+  const minNiche = 1; // At least 1 niche identify
+  const maxGeneric = 1; // Max 1 generic tag
+  
+  // Priority 1: Song/band name tags (HIGH VALUE for TikTok)
+  if (trackName && trackName.length < 30) {
+    const trackNormalized = normalizeForHashtag(trackName);
+    const trackTag = `#${trackNormalized}`;
+    const trackCoverTag = `#${trackNormalized}cover`;
+    
+    suggestions.push(trackTag);
+    usedTags.add(trackTag.toLowerCase());
+    
+    // Add cover variant if it fits
+    if (trackCoverTag.length <= 31 && suggestions.length < targetTotal) {
+      suggestions.push(trackCoverTag);
+      usedTags.add(trackCoverTag.toLowerCase());
+    }
+  }
+  
+  if (artistName) {
+    const bandNormalized = normalizeForHashtag(artistName);
+    const bandTag = `#${bandNormalized}`;
+    
+    if (!usedTags.has(bandTag.toLowerCase())) {
+      suggestions.push(bandTag);
+      usedTags.add(bandTag.toLowerCase());
+    }
+  }
+  
+  // Priority 2: Video type tags (high value for calling out what the video is)
+  if (videoType && VIDEO_TYPE_TAGS[videoType]) {
+    const videoTypeTags = VIDEO_TYPE_TAGS[videoType];
+    
+    for (const tagName of videoTypeTags) {
+      if (suggestions.length >= targetTotal) break;
+      
+      const tag = `#${tagName}`;
+      if (!usedTags.has(tag.toLowerCase())) {
+        // Check if it's broad discovery or niche
+        const isBroad = TIKTOK_BROAD_DISCOVERY.includes(tagName);
+        const isNiche = TIKTOK_NICHE_IDENTIFY.includes(tagName);
+        
+        // Prioritize video type tags that fulfill requirements
+        if (isBroad && broadDiscoveryCount < minBroad) {
+          suggestions.push(tag);
+          usedTags.add(tag.toLowerCase());
+          broadDiscoveryCount++;
+        } else if (isNiche && nicheIdentifyCount < minNiche) {
+          suggestions.push(tag);
+          usedTags.add(tag.toLowerCase());
+          nicheIdentifyCount++;
+        } else if (!isBroad && !isNiche) {
+          // It's a video type specific tag, add it
+          suggestions.push(tag);
+          usedTags.add(tag.toLowerCase());
+        }
+      }
+    }
+  }
+  
+  // Priority 3: Ensure we have broad discovery tag
+  if (broadDiscoveryCount < minBroad) {
+    const broadTags = TIKTOK_BROAD_DISCOVERY.map(t => `#${t}`);
+    
+    for (const tag of broadTags) {
+      if (suggestions.length >= targetTotal) break;
+      if (usedTags.has(tag.toLowerCase())) continue;
+      if (otherArtistNames.has(tag.toLowerCase().replace('#', ''))) continue;
+      
+      // Check historical performance
+      const tagLower = tag.toLowerCase().replace('#', '');
+      const perf = hashtagPerformance.get(tagLower);
+      
+      suggestions.push(tag);
+      usedTags.add(tag.toLowerCase());
+      broadDiscoveryCount++;
+      break;
+    }
+  }
+  
+  // Priority 4: Ensure we have niche identify tag
+  if (nicheIdentifyCount < minNiche) {
+    const nicheTags = TIKTOK_NICHE_IDENTIFY.map(t => `#${t}`);
+    
+    for (const tag of nicheTags) {
+      if (suggestions.length >= targetTotal) break;
+      if (usedTags.has(tag.toLowerCase())) continue;
+      if (otherArtistNames.has(tag.toLowerCase().replace('#', ''))) continue;
+      
+      suggestions.push(tag);
+      usedTags.add(tag.toLowerCase());
+      nicheIdentifyCount++;
+      break;
+    }
+  }
+  
+  // Priority 5: Add video type specific tags that are high value
+  // (e.g., #drumcover, #drumsolo, #livemusic)
+  const highValueVideoTags = [
+    { tag: '#drumcover', category: 'broad' },
+    { tag: '#drumsolo', category: 'niche' },
+    { tag: '#livemusic', category: 'broad' },
+    { tag: '#drumvideo', category: 'broad' },
+    { tag: '#drumbeat', category: 'niche' }
+  ];
+  
+  for (const { tag, category } of highValueVideoTags) {
+    if (suggestions.length >= targetTotal) break;
+    if (usedTags.has(tag.toLowerCase())) continue;
+    
+    const tagLower = tag.toLowerCase().replace('#', '');
+    if (otherArtistNames.has(tagLower)) continue;
+    
+    // Check if this helps fulfill requirements
+    if (category === 'broad' && broadDiscoveryCount < 2) {
+      suggestions.push(tag);
+      usedTags.add(tag.toLowerCase());
+      broadDiscoveryCount++;
+    } else if (category === 'niche' && nicheIdentifyCount < 2) {
+      suggestions.push(tag);
+      usedTags.add(tag.toLowerCase());
+      nicheIdentifyCount++;
+    } else if (suggestions.length < targetTotal) {
+      // Add it anyway if we have room
+      suggestions.push(tag);
+      usedTags.add(tag.toLowerCase());
+    }
+  }
+  
+  // Priority 6: Add one generic tag if needed (max 1, exclude #fyp)
+  if (genericCount < maxGeneric && suggestions.length < targetTotal) {
+    const genericTags = TIKTOK_GENERIC.filter(t => t !== 'fyp') // Exclude #fyp
+      .map(t => `#${t}`);
+    
+    for (const tag of genericTags) {
+      if (suggestions.length >= targetTotal) break;
+      if (usedTags.has(tag.toLowerCase())) continue;
+      
+      const tagLower = tag.toLowerCase().replace('#', '');
+      if (otherArtistNames.has(tagLower)) continue;
+      
+      suggestions.push(tag);
+      usedTags.add(tag.toLowerCase());
+      genericCount++;
+      break;
+    }
+  }
+  
+  // Priority 7: Fill remaining slots with high-performing historical tags
+  const historicalCandidates = [];
+  
+  hashtagPerformance.forEach((perf, tag) => {
+    if (usedTags.has(tag)) return;
+    if (otherArtistNames.has(tag)) return;
+    
+    const tagWithHash = `#${tag.replace('#', '')}`;
+    if (usedTags.has(tagWithHash.toLowerCase())) return;
+    
+    const isBroad = TIKTOK_BROAD_DISCOVERY.includes(tag);
+    const isNiche = TIKTOK_NICHE_IDENTIFY.includes(tag);
+    const isGeneric = TIKTOK_GENERIC.includes(tag);
+    
+    // Skip generic tags if we already have one
+    if (isGeneric && genericCount >= maxGeneric) return;
+    // Skip #fyp always
+    if (tag === 'fyp') return;
+    
+    const engagement = perf.tiktokEngagement || 0;
+    const views = perf.tiktokViews || 0;
+    
+    if (engagement > 0 || views > 0) {
+      let score = 2;
+      score += Math.min(engagement / 10, 3);
+      score += Math.min(Math.log10(views + 1) / 2, 2);
+      
+      // Boost based on what we need
+      if (isBroad && broadDiscoveryCount < 2) score += 5;
+      if (isNiche && nicheIdentifyCount < 2) score += 5;
+      
+      historicalCandidates.push({ 
+        tag: tagWithHash, 
+        score, 
+        isBroad, 
+        isNiche, 
+        isGeneric 
+      });
+    }
+  });
+  
+  // Sort by score and add remaining tags
+  historicalCandidates.sort((a, b) => b.score - a.score);
+  
+  for (const candidate of historicalCandidates) {
+    if (suggestions.length >= targetTotal) break;
+    
+    // Check limits
+    if (candidate.isGeneric && genericCount >= maxGeneric) continue;
+    
+    suggestions.push(candidate.tag);
+    usedTags.add(candidate.tag.toLowerCase());
+    
+    if (candidate.isBroad) broadDiscoveryCount++;
+    if (candidate.isNiche) nicheIdentifyCount++;
+    if (candidate.isGeneric) genericCount++;
+  }
+  
+  // Final validation: Ensure we have at least 1 broad and 1 niche (CRITICAL REQUIREMENTS)
+  // This is done even if we exceed targetTotal to ensure requirements are met
+  if (broadDiscoveryCount === 0) {
+    const broadTag = TIKTOK_BROAD_DISCOVERY.find(t => 
+      !usedTags.has(`#${t}`.toLowerCase()) && 
+      !otherArtistNames.has(t)
+    );
+    if (broadTag) {
+      suggestions.push(`#${broadTag}`);
+      usedTags.add(`#${broadTag}`.toLowerCase());
+      broadDiscoveryCount++;
+    }
+  }
+  
+  if (nicheIdentifyCount === 0) {
+    const nicheTag = TIKTOK_NICHE_IDENTIFY.find(t => 
+      !usedTags.has(`#${t}`.toLowerCase()) && 
+      !otherArtistNames.has(t)
+    );
+    if (nicheTag) {
+      suggestions.push(`#${nicheTag}`);
+      usedTags.add(`#${nicheTag}`.toLowerCase());
+      nicheIdentifyCount++;
+    }
+  }
+  
+  // Ensure we're within optimal range (3-6), but prioritize meeting requirements
+  if (suggestions.length < 3) {
+    // If we have less than 3, add high-value tags to reach minimum
+    const fallbackTags = [
+      { tag: '#drumming', category: 'broad' },
+      { tag: '#drummer', category: 'broad' },
+      { tag: '#drumcover', category: 'broad' },
+      { tag: '#music', category: 'generic' }
+    ];
+    
+    for (const { tag, category } of fallbackTags) {
+      if (suggestions.length >= 6) break;
+      if (usedTags.has(tag.toLowerCase())) continue;
+      
+      if (category === 'generic' && genericCount >= maxGeneric) continue;
+      
+      suggestions.push(tag);
+      usedTags.add(tag.toLowerCase());
+      
+      if (category === 'broad') broadDiscoveryCount++;
+      if (category === 'generic') genericCount++;
+    }
+  }
+  
+  // Trim to optimal range (3-6)
+  return suggestions.slice(0, 6);
 }
 
 function generatePlatformSuggestions(baseHashtags, hashtagPerformance, otherArtistNames, spotifyGenres, platform, maxCount) {

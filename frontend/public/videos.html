@@ -463,7 +463,10 @@ async function openHashtagSuggestionsModal(video) {
                             </span>
                         `).join('')}
                     </div>
-                    <button class="copy-hashtags-btn" data-platform="instagram">Copy Instagram Hashtags</button>
+                    <div class="hashtag-buttons-group">
+                        <button class="copy-hashtags-btn copy-recommended-btn" data-platform="instagram" data-type="recommended">Copy Recommended (Top 5)</button>
+                        <button class="copy-hashtags-btn copy-all-btn" data-platform="instagram" data-type="all">Copy All</button>
+                    </div>
                 </div>
                 
                 <div class="hashtag-platform-section">
@@ -475,7 +478,10 @@ async function openHashtagSuggestionsModal(video) {
                             </span>
                         `).join('')}
                     </div>
-                    <button class="copy-hashtags-btn" data-platform="tiktok">Copy TikTok Hashtags</button>
+                    <div class="hashtag-buttons-group">
+                        <button class="copy-hashtags-btn copy-recommended-btn" data-platform="tiktok" data-type="recommended">Copy Recommended (Top 5)</button>
+                        <button class="copy-hashtags-btn copy-all-btn" data-platform="tiktok" data-type="all">Copy All</button>
+                    </div>
                 </div>
                 
                 <div class="hashtag-suggestions-footer">
@@ -499,12 +505,25 @@ async function openHashtagSuggestionsModal(video) {
         modal.querySelectorAll('.copy-hashtags-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const platform = btn.getAttribute('data-platform');
-                const hashtags = platform === 'instagram' ? data.instagram : data.tiktok;
+                const type = btn.getAttribute('data-type'); // 'recommended' or 'all'
+                const allHashtags = platform === 'instagram' ? data.instagram : data.tiktok;
+                
+                // Get hashtags based on type
+                let hashtags;
+                if (type === 'recommended') {
+                    // Top 5 recommended hashtags
+                    hashtags = allHashtags.slice(0, 5);
+                } else {
+                    // All hashtags
+                    hashtags = allHashtags;
+                }
+                
                 const text = hashtags.join(' ');
                 navigator.clipboard.writeText(text).then(() => {
+                    const originalText = btn.textContent;
                     btn.textContent = '✓ Copied!';
                     setTimeout(() => {
-                        btn.textContent = platform === 'instagram' ? 'Copy Instagram Hashtags' : 'Copy TikTok Hashtags';
+                        btn.textContent = originalText;
                     }, 2000);
                 });
             });

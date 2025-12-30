@@ -676,6 +676,13 @@ input[type="file"] {
     border-color: #218838;
 }
 
+.hashtag-buttons-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
 .copy-hashtags-btn {
     padding: 10px 20px;
     background-color: #6f42c1;
@@ -686,9 +693,27 @@ input[type="file"] {
     font-size: 14px;
     font-weight: 500;
     transition: background-color 0.2s;
+    flex: 1;
+    min-width: 150px;
 }
 
 .copy-hashtags-btn:hover {
+    background-color: #5a32a3;
+}
+
+.copy-recommended-btn {
+    background-color: #28a745;
+}
+
+.copy-recommended-btn:hover {
+    background-color: #218838;
+}
+
+.copy-all-btn {
+    background-color: #6f42c1;
+}
+
+.copy-all-btn:hover {
     background-color: #5a32a3;
 }
 
