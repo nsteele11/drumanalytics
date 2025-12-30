@@ -450,6 +450,12 @@ async function openHashtagSuggestionsModal(video) {
         
         const data = await response.json();
         
+        // Calculate recommended counts based on total suggestions
+        // Instagram: top 8-10 recommended out of 15 (optimal is 7-12)
+        const igRecommendedCount = Math.min(Math.max(8, Math.floor(data.instagram.length * 0.6)), 10);
+        // TikTok: top 5-7 recommended out of 15 (optimal is 3-6)
+        const tiktokRecommendedCount = Math.min(Math.max(5, Math.floor(data.tiktok.length * 0.4)), 7);
+        
         // Update modal with suggestions
         const loadingDiv = modal.querySelector('.hashtag-suggestions-loading');
         loadingDiv.innerHTML = `
@@ -458,14 +464,14 @@ async function openHashtagSuggestionsModal(video) {
                     <h3>📷 Instagram Hashtags</h3>
                     <div class="hashtag-list">
                         ${data.instagram.map((tag, index) => `
-                            <span class="hashtag-tag ${index < 5 ? 'hashtag-top' : ''}" data-hashtag="${escapeHtml(tag)}">
+                            <span class="hashtag-tag ${index < igRecommendedCount ? 'hashtag-top' : ''}" data-hashtag="${escapeHtml(tag)}">
                                 ${escapeHtml(tag)}
                             </span>
                         `).join('')}
                     </div>
                     <div class="hashtag-buttons-group">
-                        <button class="copy-hashtags-btn copy-recommended-btn" data-platform="instagram" data-type="recommended">Copy Recommended (Top 5)</button>
-                        <button class="copy-hashtags-btn copy-all-btn" data-platform="instagram" data-type="all">Copy All</button>
+                        <button class="copy-hashtags-btn copy-recommended-btn" data-platform="instagram" data-type="recommended" data-count="${igRecommendedCount}">Copy Recommended (Top ${igRecommendedCount})</button>
+                        <button class="copy-hashtags-btn copy-all-btn" data-platform="instagram" data-type="all">Copy All (${data.instagram.length})</button>
                     </div>
                 </div>
                 
@@ -473,19 +479,19 @@ async function openHashtagSuggestionsModal(video) {
                     <h3>🎵 TikTok Hashtags</h3>
                     <div class="hashtag-list">
                         ${data.tiktok.map((tag, index) => `
-                            <span class="hashtag-tag ${index < 5 ? 'hashtag-top' : ''}" data-hashtag="${escapeHtml(tag)}">
+                            <span class="hashtag-tag ${index < tiktokRecommendedCount ? 'hashtag-top' : ''}" data-hashtag="${escapeHtml(tag)}">
                                 ${escapeHtml(tag)}
                             </span>
                         `).join('')}
                     </div>
                     <div class="hashtag-buttons-group">
-                        <button class="copy-hashtags-btn copy-recommended-btn" data-platform="tiktok" data-type="recommended">Copy Recommended (Top 5)</button>
-                        <button class="copy-hashtags-btn copy-all-btn" data-platform="tiktok" data-type="all">Copy All</button>
+                        <button class="copy-hashtags-btn copy-recommended-btn" data-platform="tiktok" data-type="recommended" data-count="${tiktokRecommendedCount}">Copy Recommended (Top ${tiktokRecommendedCount})</button>
+                        <button class="copy-hashtags-btn copy-all-btn" data-platform="tiktok" data-type="all">Copy All (${data.tiktok.length})</button>
                     </div>
                 </div>
                 
                 <div class="hashtag-suggestions-footer">
-                    <p class="hashtag-note">💡 Top 5 recommendations are highlighted. Click any hashtag to copy it individually.</p>
+                    <p class="hashtag-note">💡 Top ${igRecommendedCount} Instagram and top ${tiktokRecommendedCount} TikTok recommendations are highlighted. Click any hashtag to copy it individually.</p>
                 </div>
             </div>
         `;
@@ -511,8 +517,10 @@ async function openHashtagSuggestionsModal(video) {
                 // Get hashtags based on type
                 let hashtags;
                 if (type === 'recommended') {
-                    // Top 5 recommended hashtags
-                    hashtags = allHashtags.slice(0, 5);
+                    // Top N recommended hashtags (dynamic count from data attribute)
+                    const recommendedCount = parseInt(btn.getAttribute('data-count')) || 
+                        (platform === 'instagram' ? igRecommendedCount : tiktokRecommendedCount);
+                    hashtags = allHashtags.slice(0, recommendedCount);
                 } else {
                     // All hashtags
                     hashtags = allHashtags;

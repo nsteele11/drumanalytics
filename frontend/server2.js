@@ -807,16 +807,40 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
   // Generate base hashtags (only from current video's metadata)
   const baseHashtags = generateBaseHashtags(artistName, trackName, genres);
 
-  // Get previous hashtag sets for variation calculation
+  // Get previous hashtag sets for variation calculation (with posted dates for temporal weighting)
   const previousHashtagSets = [];
   allVideos.forEach(video => {
     if (video.s3Key === currentVideo.s3Key) return;
+    
+    // Get posted date or use upload timestamp as fallback
+    let postedDate = null;
+    if (video.postedDate) {
+      // Parse date string (could be YYYY-MM-DD or ISO format)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(video.postedDate)) {
+        postedDate = new Date(video.postedDate + 'T12:00:00').getTime();
+      } else {
+        postedDate = new Date(video.postedDate).getTime();
+      }
+    } else if (video.uploadTimestamp) {
+      postedDate = video.uploadTimestamp;
+    }
+    
     if (video.igHashtags) {
       const tags = extractHashtags(video.igHashtags).map(t => t.toLowerCase());
       if (tags.length > 0) {
-        previousHashtagSets.push(new Set(tags));
+        previousHashtagSets.push({ 
+          tags: new Set(tags), 
+          postedDate: postedDate 
+        });
       }
     }
+  });
+  
+  // Sort by posted date (most recent first) for better rotation tracking
+  previousHashtagSets.sort((a, b) => {
+    const dateA = a.postedDate || 0;
+    const dateB = b.postedDate || 0;
+    return dateB - dateA;
   });
 
   // Generate Instagram recommendations with improved algorithm
@@ -830,6 +854,41 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
     previousHashtagSets
   );
 
+  // Get previous TikTok hashtag sets for variation calculation (with posted dates)
+  const previousTikTokHashtagSets = [];
+  allVideos.forEach(video => {
+    if (video.s3Key === currentVideo.s3Key) return;
+    
+    // Get posted date or use upload timestamp as fallback
+    let postedDate = null;
+    if (video.postedDate) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(video.postedDate)) {
+        postedDate = new Date(video.postedDate + 'T12:00:00').getTime();
+      } else {
+        postedDate = new Date(video.postedDate).getTime();
+      }
+    } else if (video.uploadTimestamp) {
+      postedDate = video.uploadTimestamp;
+    }
+    
+    if (video.tiktokHashtags) {
+      const tags = extractHashtags(video.tiktokHashtags).map(t => t.toLowerCase());
+      if (tags.length > 0) {
+        previousTikTokHashtagSets.push({ 
+          tags: new Set(tags), 
+          postedDate: postedDate 
+        });
+      }
+    }
+  });
+  
+  // Sort by posted date (most recent first)
+  previousTikTokHashtagSets.sort((a, b) => {
+    const dateA = a.postedDate || 0;
+    const dateB = b.postedDate || 0;
+    return dateB - dateA;
+  });
+
   // Generate TikTok recommendations with improved algorithm
   const videoType = currentVideo.videoType || null;
   const tiktokSuggestions = generateTikTokSuggestions(
@@ -839,7 +898,8 @@ function generateHashtagSuggestions(currentVideo, allVideos) {
     genres,
     artistName,
     trackName,
-    videoType
+    videoType,
+    previousTikTokHashtagSets
   );
 
   return {
@@ -955,13 +1015,87 @@ function jaccardSimilarity(set1, set2) {
   return intersection.size / union.size;
 }
 
-// Check if a hashtag set has sufficient variation from previous posts
+// Genre to hashtag mapping (for Instagram and TikTok)
+const GENRE_HASHTAGS = {
+  'rock': ['rock', 'rockmusic', 'classicrock', 'hardrock', 'alternativerock', 'progrock'],
+  'metal': ['metal', 'heavymetal', 'metalmusic', 'deathmetal', 'metalcove'],
+  'jazz': ['jazz', 'jazzmusic', 'jazzdrums', 'bebop', 'smoothjazz'],
+  'funk': ['funk', 'funkmusic', 'funkydrums', 'pfunk'],
+  'pop': ['pop', 'popmusic', 'poppunk', 'indiepop'],
+  'punk': ['punk', 'punkrock', 'punkdrums', 'hardcore'],
+  'blues': ['blues', 'bluesmusic', 'bluesdrums'],
+  'country': ['country', 'countrymusic', 'countrydrums'],
+  'electronic': ['electronic', 'edm', 'electronicmusic', 'electronicdrums'],
+  'hip hop': ['hiphop', 'rap', 'hiphopdrums', 'traphip'],
+  'r&b': ['rnb', 'rb', 'randb', 'soul'],
+  'reggae': ['reggae', 'reggaemusic', 'reggaedrums'],
+  'progressive rock': ['progrock', 'progressiverock', 'prog'],
+  'alternative': ['alternative', 'altrock', 'alternativerock'],
+  'indie': ['indie', 'indierock', 'indiemusic']
+};
+
+// Normalize genre name for lookup
+function normalizeGenre(genre) {
+  return genre.toLowerCase().trim();
+}
+
+// Get genre hashtags for a list of genres
+function getGenreHashtags(genres) {
+  const genreTags = [];
+  const usedGenres = new Set();
+  
+  for (const genre of genres) {
+    const normalized = normalizeGenre(genre);
+    if (usedGenres.has(normalized)) continue;
+    usedGenres.add(normalized);
+    
+    // Direct match
+    if (GENRE_HASHTAGS[normalized]) {
+      genreTags.push(...GENRE_HASHTAGS[normalized]);
+      continue;
+    }
+    
+    // Partial match (e.g., "progressive rock" contains "rock")
+    for (const [key, tags] of Object.entries(GENRE_HASHTAGS)) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        genreTags.push(...tags);
+        break;
+      }
+    }
+  }
+  
+  return [...new Set(genreTags)]; // Remove duplicates
+}
+
+// Check if a hashtag set has sufficient variation from previous posts (with temporal weighting)
+// Recent posts are weighted more heavily in similarity checks
 function hasSufficientVariation(proposedSet, previousSets, threshold = 0.7) {
   if (previousSets.length === 0) return true;
   
-  for (const prevSet of previousSets) {
+  const now = Date.now();
+  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  const oneMonth = 30 * 24 * 60 * 60 * 1000;
+  
+  for (const prevSetData of previousSets) {
+    const prevSet = prevSetData.tags || prevSetData; // Support both old format and new format
     const similarity = jaccardSimilarity(proposedSet, prevSet);
-    if (similarity >= threshold) {
+    
+    // Adjust threshold based on recency - more recent posts require more variation
+    let effectiveThreshold = threshold;
+    if (prevSetData.postedDate) {
+      const daysSincePosted = (now - prevSetData.postedDate) / (24 * 60 * 60 * 1000);
+      
+      if (daysSincePosted < 7) {
+        // Very recent (within a week) - require more variation
+        effectiveThreshold = threshold * 0.6; // Stricter (0.7 * 0.6 = 0.42)
+      } else if (daysSincePosted < 30) {
+        // Recent (within a month) - moderate variation
+        effectiveThreshold = threshold * 0.8; // Moderately stricter (0.7 * 0.8 = 0.56)
+      }
+      // Older posts use default threshold
+    }
+    
+    if (similarity >= effectiveThreshold) {
       return false; // Too similar to a previous post
     }
   }
@@ -985,12 +1119,14 @@ function generateInstagramSuggestions(
   let highCount = 0;
   let mediumCount = 0;
   let nicheCount = 0;
+  let genreTagCount = 0;
   
-  // Target counts: 1-2 high, 3-5 medium, 1-2 niche (total 7-12)
-  const targetHigh = Math.min(2, 1);
-  const targetMedium = 4; // Aim for 4 medium hashtags
-  const targetNiche = 2; // At least 1, aim for 2
-  const targetTotal = 10; // Aim for 10 hashtags (within 7-12 range)
+  // Target counts: 1-2 high, 3-5 medium, 1-2 niche (total 15 always)
+  const targetHigh = 2; // 1-2 high volume
+  const targetMedium = 6; // 3-5 medium (aim for more to reach 15)
+  const targetNiche = 3; // At least 1, aim for more
+  const targetTotal = 15; // Always return 15 hashtags
+  const minGenreTags = 1; // At least 1 genre tag required
   
   // Priority 1: Always include band name and song name cleanly
   const bandTag = baseHashtags.find(h => h.source === 'band');
@@ -1013,7 +1149,18 @@ function generateInstagramSuggestions(
     }
   }
   
-  // Priority 2: Highly impactful drum-related hashtags (always prioritize these)
+  // Priority 2: Genre hashtags (REQUIRED - at least 1 for Instagram)
+  const genreTagOptions = getGenreHashtags(genres);
+  const genreTags = [];
+  genreTagOptions.forEach(genreTag => {
+    const tag = `#${genreTag}`;
+    if (!usedTags.has(tag.toLowerCase())) {
+      const volume = getHashtagVolume(tag);
+      genreTags.push({ tag, volume, genreTag: true });
+    }
+  });
+  
+  // Priority 3: Drum-related hashtags (reduced dominance - balanced with genre)
   const drumTags = [
     { tag: '#drummer', volume: 'high' },
     { tag: '#drumming', volume: 'high' },
@@ -1028,20 +1175,43 @@ function generateInstagramSuggestions(
     { tag: '#drummingtechnique', volume: 'niche' }
   ];
   
-  // Score all potential hashtags including drum tags
+  // Score all potential hashtags
   const scoredHashtags = [];
   
-  // Score drum tags with high priority
-  drumTags.forEach(({ tag, volume }) => {
+  // Score genre tags with high priority (especially for Instagram)
+  genreTags.forEach(({ tag, volume }) => {
     if (usedTags.has(tag.toLowerCase())) return;
     
     const perf = hashtagPerformance.get(tag.toLowerCase().replace('#', ''));
-    let score = 20; // Very high base score for drum tags
+    let score = 18; // High base score for genre tags
+    
+    // Extra boost if we don't have genre tags yet
+    if (genreTagCount < minGenreTags) score += 15; // Strong boost to ensure at least 1
     
     // Boost based on volume category needs
     if (volume === 'high' && highCount < targetHigh) score += 5;
     if (volume === 'medium' && mediumCount < targetMedium) score += 5;
-    if (volume === 'niche' && nicheCount < targetNiche) score += 10; // Prioritize niche
+    if (volume === 'niche' && nicheCount < targetNiche) score += 10;
+    
+    if (perf) {
+      const engagement = perf.igEngagement || 0;
+      score += Math.min(engagement / 10, 3);
+    }
+    
+    scoredHashtags.push({ tag, score, source: 'genre', volume, isGenreTag: true });
+  });
+  
+  // Score drum tags with moderate priority (less dominant than before)
+  drumTags.forEach(({ tag, volume }) => {
+    if (usedTags.has(tag.toLowerCase())) return;
+    
+    const perf = hashtagPerformance.get(tag.toLowerCase().replace('#', ''));
+    let score = 12; // Reduced from 20 - less dominant than genre tags
+    
+    // Boost based on volume category needs
+    if (volume === 'high' && highCount < targetHigh) score += 5;
+    if (volume === 'medium' && mediumCount < targetMedium) score += 5;
+    if (volume === 'niche' && nicheCount < targetNiche) score += 8;
     
     if (perf) {
       const engagement = perf.igEngagement || 0;
@@ -1114,13 +1284,27 @@ function generateInstagramSuggestions(
   // Select hashtags to meet volume requirements
   const candidates = scoredHashtags.filter(h => !usedTags.has(h.tag.toLowerCase()));
   
-  // First, ensure we have at least one niche hashtag (requirement: always at least one niche)
+  // First, ensure we have at least one genre tag (REQUIRED for Instagram)
+  if (genreTagCount < minGenreTags) {
+    const genreCandidate = candidates.find(h => h.isGenreTag);
+    if (genreCandidate) {
+      suggestions.push(genreCandidate.tag);
+      usedTags.add(genreCandidate.tag.toLowerCase());
+      genreTagCount++;
+      if (genreCandidate.volume === 'high') highCount++;
+      else if (genreCandidate.volume === 'medium') mediumCount++;
+      else if (genreCandidate.volume === 'niche') nicheCount++;
+    }
+  }
+  
+  // Second, ensure we have at least one niche hashtag (requirement: always at least one niche)
   if (nicheCount === 0) {
     const nicheCandidate = candidates.find(h => h.volume === 'niche');
     if (nicheCandidate) {
       suggestions.push(nicheCandidate.tag);
       usedTags.add(nicheCandidate.tag.toLowerCase());
       nicheCount++;
+      if (nicheCandidate.isGenreTag) genreTagCount++;
     }
   }
   
@@ -1156,7 +1340,7 @@ function generateInstagramSuggestions(
     
     if (!selected) break;
     
-    // Check Jaccard similarity with previous posts before adding
+    // Check Jaccard similarity with previous posts before adding (using date-weighted variation)
     const testSet = new Set([...suggestions.map(t => t.toLowerCase()), selected.tag.toLowerCase()]);
     if (hasSufficientVariation(testSet, previousHashtagSets, 0.7)) {
       suggestions.push(selected.tag);
@@ -1165,14 +1349,16 @@ function generateInstagramSuggestions(
       if (selected.volume === 'high') highCount++;
       else if (selected.volume === 'medium') mediumCount++;
       else if (selected.volume === 'niche') nicheCount++;
+      if (selected.isGenreTag) genreTagCount++;
     } else {
-      // Skip this tag as it's too similar to previous posts
+      // Skip this tag as it's too similar to previous posts (based on posted dates)
       usedTags.add(selected.tag.toLowerCase()); // Mark as used so we don't try again
     }
   }
   
   // If we still don't have enough, fill without volume restrictions (but still check variation)
-  while (suggestions.length < 7 && candidates.length > 0) {
+  // Keep going until we reach targetTotal (15)
+  while (suggestions.length < targetTotal && candidates.length > 0) {
     const remaining = candidates.find(h => !usedTags.has(h.tag.toLowerCase()));
     if (!remaining) break;
     
@@ -1185,8 +1371,19 @@ function generateInstagramSuggestions(
       if (remaining.volume === 'high') highCount++;
       else if (remaining.volume === 'medium') mediumCount++;
       else if (remaining.volume === 'niche') nicheCount++;
+      if (remaining.isGenreTag) genreTagCount++;
     } else {
       usedTags.add(remaining.tag.toLowerCase());
+    }
+  }
+  
+  // Final check: ensure we have at least one genre tag (critical requirement)
+  if (genreTagCount === 0 && suggestions.length > 0) {
+    const allGenreCandidates = scoredHashtags.filter(h => h.isGenreTag && !usedTags.has(h.tag.toLowerCase()));
+    if (allGenreCandidates.length > 0) {
+      // Replace a less critical hashtag with a genre one
+      suggestions[suggestions.length - 1] = allGenreCandidates[0].tag;
+      genreTagCount++;
     }
   }
   
@@ -1201,8 +1398,23 @@ function generateInstagramSuggestions(
     }
   }
   
-  // Trim to optimal range (7-12)
-  return suggestions.slice(0, 12);
+  // Pad to exactly 15 if needed (use remaining candidates)
+  while (suggestions.length < targetTotal && candidates.length > 0) {
+    const remaining = candidates.find(h => !usedTags.has(h.tag.toLowerCase()));
+    if (!remaining) break;
+    
+    // Skip variation check for final padding - prioritize filling to 15
+    suggestions.push(remaining.tag);
+    usedTags.add(remaining.tag.toLowerCase());
+    
+    if (remaining.volume === 'high') highCount++;
+    else if (remaining.volume === 'medium') mediumCount++;
+    else if (remaining.volume === 'niche') nicheCount++;
+    if (remaining.isGenreTag) genreTagCount++;
+  }
+  
+  // Always return exactly 15 hashtags (or fewer if not enough candidates available)
+  return suggestions.slice(0, targetTotal);
 }
 
 // ----------------------
@@ -1246,7 +1458,8 @@ function generateTikTokSuggestions(
   genres,
   artistName,
   trackName,
-  videoType
+  videoType,
+  previousHashtagSets = []
 ) {
   const suggestions = [];
   const usedTags = new Set();
@@ -1256,10 +1469,10 @@ function generateTikTokSuggestions(
   let nicheIdentifyCount = 0;
   let genericCount = 0;
   
-  // Target: 3-6 hashtags total
-  const targetTotal = 5; // Aim for 5 hashtags
-  const minBroad = 1; // At least 1 broad discovery
-  const minNiche = 1; // At least 1 niche identify
+  // Target: Always 15 hashtags
+  const targetTotal = 15; // Always return 15 hashtags
+  const minBroad = 3; // At least 3 broad discovery (increased for 15 total)
+  const minNiche = 3; // At least 3 niche identify (increased for 15 total)
   const maxGeneric = 1; // Max 1 generic tag
   
   // Priority 1: Song/band name tags (HIGH VALUE for TikTok)
@@ -1319,40 +1532,50 @@ function generateTikTokSuggestions(
     }
   }
   
-  // Priority 3: Ensure we have broad discovery tag
-  if (broadDiscoveryCount < minBroad) {
+  // Priority 3: Ensure we have broad discovery tags (with variation check)
+  while (broadDiscoveryCount < minBroad && suggestions.length < targetTotal) {
     const broadTags = TIKTOK_BROAD_DISCOVERY.map(t => `#${t}`);
+    let added = false;
     
     for (const tag of broadTags) {
       if (suggestions.length >= targetTotal) break;
       if (usedTags.has(tag.toLowerCase())) continue;
       if (otherArtistNames.has(tag.toLowerCase().replace('#', ''))) continue;
       
-      // Check historical performance
-      const tagLower = tag.toLowerCase().replace('#', '');
-      const perf = hashtagPerformance.get(tagLower);
-      
-      suggestions.push(tag);
-      usedTags.add(tag.toLowerCase());
-      broadDiscoveryCount++;
-      break;
+      // Check variation before adding
+      const testSet = new Set([...suggestions.map(t => t.toLowerCase()), tag.toLowerCase()]);
+      if (hasSufficientVariation(testSet, previousHashtagSets, 0.7)) {
+        suggestions.push(tag);
+        usedTags.add(tag.toLowerCase());
+        broadDiscoveryCount++;
+        added = true;
+        break;
+      }
     }
+    if (!added) break; // No more valid broad tags with sufficient variation
   }
   
-  // Priority 4: Ensure we have niche identify tag
-  if (nicheIdentifyCount < minNiche) {
+  // Priority 4: Ensure we have niche identify tags (with variation check)
+  while (nicheIdentifyCount < minNiche && suggestions.length < targetTotal) {
     const nicheTags = TIKTOK_NICHE_IDENTIFY.map(t => `#${t}`);
+    let added = false;
     
     for (const tag of nicheTags) {
       if (suggestions.length >= targetTotal) break;
       if (usedTags.has(tag.toLowerCase())) continue;
       if (otherArtistNames.has(tag.toLowerCase().replace('#', ''))) continue;
       
-      suggestions.push(tag);
-      usedTags.add(tag.toLowerCase());
-      nicheIdentifyCount++;
-      break;
+      // Check variation before adding
+      const testSet = new Set([...suggestions.map(t => t.toLowerCase()), tag.toLowerCase()]);
+      if (hasSufficientVariation(testSet, previousHashtagSets, 0.7)) {
+        suggestions.push(tag);
+        usedTags.add(tag.toLowerCase());
+        nicheIdentifyCount++;
+        added = true;
+        break;
+      }
     }
+    if (!added) break; // No more valid niche tags with sufficient variation
   }
   
   // Priority 5: Add video type specific tags that are high value
@@ -1457,66 +1680,102 @@ function generateTikTokSuggestions(
     // Check limits
     if (candidate.isGeneric && genericCount >= maxGeneric) continue;
     
-    suggestions.push(candidate.tag);
-    usedTags.add(candidate.tag.toLowerCase());
-    
-    if (candidate.isBroad) broadDiscoveryCount++;
-    if (candidate.isNiche) nicheIdentifyCount++;
-    if (candidate.isGeneric) genericCount++;
+    // Check variation before adding
+    const testSet = new Set([...suggestions.map(t => t.toLowerCase()), candidate.tag.toLowerCase()]);
+    if (hasSufficientVariation(testSet, previousHashtagSets, 0.7)) {
+      suggestions.push(candidate.tag);
+      usedTags.add(candidate.tag.toLowerCase());
+      
+      if (candidate.isBroad) broadDiscoveryCount++;
+      if (candidate.isNiche) nicheIdentifyCount++;
+      if (candidate.isGeneric) genericCount++;
+    }
   }
   
-  // Final validation: Ensure we have at least 1 broad and 1 niche (CRITICAL REQUIREMENTS)
+  // Final validation: Ensure we have at least minBroad and minNiche (CRITICAL REQUIREMENTS)
   // This is done even if we exceed targetTotal to ensure requirements are met
-  if (broadDiscoveryCount === 0) {
+  while (broadDiscoveryCount < minBroad && suggestions.length < targetTotal * 1.2) {
     const broadTag = TIKTOK_BROAD_DISCOVERY.find(t => 
       !usedTags.has(`#${t}`.toLowerCase()) && 
       !otherArtistNames.has(t)
     );
     if (broadTag) {
-      suggestions.push(`#${broadTag}`);
-      usedTags.add(`#${broadTag}`.toLowerCase());
-      broadDiscoveryCount++;
+      const tag = `#${broadTag}`;
+      const testSet = new Set([...suggestions.map(t => t.toLowerCase()), tag.toLowerCase()]);
+      if (hasSufficientVariation(testSet, previousHashtagSets, 0.7)) {
+        suggestions.push(tag);
+        usedTags.add(tag.toLowerCase());
+        broadDiscoveryCount++;
+      } else {
+        usedTags.add(tag.toLowerCase()); // Mark as used to skip
+      }
+    } else {
+      break;
     }
   }
   
-  if (nicheIdentifyCount === 0) {
+  while (nicheIdentifyCount < minNiche && suggestions.length < targetTotal * 1.2) {
     const nicheTag = TIKTOK_NICHE_IDENTIFY.find(t => 
       !usedTags.has(`#${t}`.toLowerCase()) && 
       !otherArtistNames.has(t)
     );
     if (nicheTag) {
-      suggestions.push(`#${nicheTag}`);
-      usedTags.add(`#${nicheTag}`.toLowerCase());
-      nicheIdentifyCount++;
+      const tag = `#${nicheTag}`;
+      const testSet = new Set([...suggestions.map(t => t.toLowerCase()), tag.toLowerCase()]);
+      if (hasSufficientVariation(testSet, previousHashtagSets, 0.7)) {
+        suggestions.push(tag);
+        usedTags.add(tag.toLowerCase());
+        nicheIdentifyCount++;
+      } else {
+        usedTags.add(tag.toLowerCase()); // Mark as used to skip
+      }
+    } else {
+      break;
     }
   }
   
-  // Ensure we're within optimal range (3-6), but prioritize meeting requirements
-  if (suggestions.length < 3) {
-    // If we have less than 3, add high-value tags to reach minimum
-    const fallbackTags = [
-      { tag: '#drumming', category: 'broad' },
-      { tag: '#drummer', category: 'broad' },
-      { tag: '#drumcover', category: 'broad' },
-      { tag: '#music', category: 'generic' }
+  // Pad to exactly 15 if needed (use remaining candidates without strict variation check)
+  while (suggestions.length < targetTotal) {
+    // Use any remaining candidates from all sources
+    const allRemaining = [
+      ...historicalCandidates.filter(h => !usedTags.has(h.tag.toLowerCase())),
+      ...highValueVideoTags.filter(h => !usedTags.has(h.tag.toLowerCase())).map(h => ({ 
+        tag: h.tag, 
+        score: 10, 
+        isBroad: h.category === 'broad', 
+        isNiche: h.category === 'niche',
+        isGeneric: false
+      })),
+      ...TIKTOK_BROAD_DISCOVERY.filter(t => !usedTags.has(`#${t}`.toLowerCase())).map(t => ({ 
+        tag: `#${t}`, 
+        score: 5, 
+        isBroad: true, 
+        isNiche: false,
+        isGeneric: false
+      })),
+      ...TIKTOK_NICHE_IDENTIFY.filter(t => !usedTags.has(`#${t}`.toLowerCase())).map(t => ({ 
+        tag: `#${t}`, 
+        score: 5, 
+        isBroad: false, 
+        isNiche: true,
+        isGeneric: false
+      }))
     ];
     
-    for (const { tag, category } of fallbackTags) {
-      if (suggestions.length >= 6) break;
-      if (usedTags.has(tag.toLowerCase())) continue;
-      
-      if (category === 'generic' && genericCount >= maxGeneric) continue;
-      
-      suggestions.push(tag);
-      usedTags.add(tag.toLowerCase());
-      
-      if (category === 'broad') broadDiscoveryCount++;
-      if (category === 'generic') genericCount++;
-    }
+    const remaining = allRemaining[0]; // Take first available
+    if (!remaining) break;
+    
+    // Skip variation check for final padding - prioritize filling to 15
+    suggestions.push(remaining.tag);
+    usedTags.add(remaining.tag.toLowerCase());
+    
+    if (remaining.isBroad) broadDiscoveryCount++;
+    if (remaining.isNiche) nicheIdentifyCount++;
+    if (remaining.isGeneric) genericCount++;
   }
   
-  // Trim to optimal range (3-6)
-  return suggestions.slice(0, 6);
+  // Always return exactly 15 hashtags (or fewer if not enough candidates available)
+  return suggestions.slice(0, targetTotal);
 }
 
 function generatePlatformSuggestions(baseHashtags, hashtagPerformance, otherArtistNames, spotifyGenres, platform, maxCount) {
