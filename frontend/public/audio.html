@@ -538,7 +538,23 @@
                 return;
             }
 
-            container.innerHTML = working.map(item => {
+            // Group results by platform
+            const instagramResults = [];
+            const tiktokResults = [];
+            const generalResults = [];
+
+            working.forEach(item => {
+                if (item.feature === 'ig_hashtag') {
+                    instagramResults.push(item);
+                } else if (item.feature === 'tiktok_hashtag') {
+                    tiktokResults.push(item);
+                } else {
+                    generalResults.push(item);
+                }
+            });
+
+            // Helper function to render a card
+            function renderCard(item) {
                 const avgLift = (item.lift_views + item.lift_likes) / 2;
                 const cardClass = avgLift > 1.0 ? 'positive' : '';
                 const bucketRange = item.bucket_range ? ` <span style="font-size: 12px; color: #666; font-style: italic;">(${escapeHtml(item.bucket_range)})</span>` : '';
@@ -576,7 +592,53 @@
                         </div>
                     </div>
                 `;
-            }).join('');
+            }
+
+            // Build HTML with grouped sections
+            let html = '';
+
+            // Instagram-specific section
+            if (instagramResults.length > 0) {
+                html += `
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="margin-bottom: 15px; color: #333; font-size: 20px; display: flex; align-items: center; gap: 8px;">
+                            📷 Instagram-Specific
+                        </h3>
+                        ${instagramResults.map(renderCard).join('')}
+                    </div>
+                `;
+            }
+
+            // TikTok-specific section
+            if (tiktokResults.length > 0) {
+                html += `
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="margin-bottom: 15px; color: #333; font-size: 20px; display: flex; align-items: center; gap: 8px;">
+                            🎵 TikTok-Specific
+                        </h3>
+                        ${tiktokResults.map(renderCard).join('')}
+                    </div>
+                `;
+            }
+
+            // General information section
+            if (generalResults.length > 0) {
+                html += `
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="margin-bottom: 15px; color: #333; font-size: 20px; display: flex; align-items: center; gap: 8px;">
+                            📊 General Information
+                        </h3>
+                        ${generalResults.map(renderCard).join('')}
+                    </div>
+                `;
+            }
+
+            // If all sections are empty, show empty state
+            if (html === '') {
+                html = '<div class="empty-state"><p>No clear patterns identified yet.</p></div>';
+            }
+
+            container.innerHTML = html;
         }
 
         function displayPerVideoComparison(videos) {
