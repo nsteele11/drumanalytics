@@ -603,7 +603,8 @@
                     </thead>
                     <tbody>
                         ${videos.map(video => {
-                            const rankClass = video.performance_rank >= 7 ? 'high' : video.performance_rank >= 4 ? 'medium' : 'low';
+                            // Lower rank is better (rank 1 is best), so invert the logic
+                            const rankClass = video.performance_rank <= 3 ? 'high' : video.performance_rank <= 6 ? 'medium' : 'low';
                             const overlapTraits = video.metadata_overlap_with_top_30_percent?.traits || [];
                             const uniqueTraits = video.unique_traits || [];
                             
