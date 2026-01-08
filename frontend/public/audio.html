@@ -496,13 +496,14 @@
             container.innerHTML = signals.map(signal => {
                 const avgLift = (signal.lift_views + signal.lift_likes) / 2;
                 const cardClass = avgLift > 1.0 ? 'positive' : avgLift < 1.0 ? 'negative' : '';
+                const bucketRange = signal.bucket_range ? ` <span style="font-size: 12px; color: #666; font-style: italic;">(${escapeHtml(signal.bucket_range)})</span>` : '';
                 
                 return `
                     <div class="signal-card ${cardClass}">
                         <div class="signal-header">
                             <div>
                                 <span class="signal-feature">${escapeHtml(signal.feature)}</span>
-                                <span class="signal-value">: ${escapeHtml(signal.value)}</span>
+                                <span class="signal-value">: ${escapeHtml(signal.value)}</span>${bucketRange}
                             </div>
                             <span style="font-size: 12px; color: #666;">n=${signal.sample_size}</span>
                         </div>
@@ -540,13 +541,14 @@
             container.innerHTML = working.map(item => {
                 const avgLift = (item.lift_views + item.lift_likes) / 2;
                 const cardClass = avgLift > 1.0 ? 'positive' : '';
+                const bucketRange = item.bucket_range ? ` <span style="font-size: 12px; color: #666; font-style: italic;">(${escapeHtml(item.bucket_range)})</span>` : '';
                 
                 return `
                     <div class="signal-card ${cardClass}">
                         <div class="signal-header">
                             <div>
                                 <span class="signal-feature">${escapeHtml(item.feature)}</span>
-                                <span class="signal-value">: ${escapeHtml(item.value)}</span>
+                                <span class="signal-value">: ${escapeHtml(item.value)}</span>${bucketRange}
                             </div>
                             <span style="font-size: 12px; color: #666;">n=${item.sample_size}</span>
                         </div>
@@ -613,9 +615,26 @@
                                     </td>
                                     <td>${escapeHtml(video.platform || 'unknown')}</td>
                                     <td>
-                                        <span class="performance-rank ${rankClass}">
-                                            ${video.performance_rank.toFixed(2)}
-                                        </span>
+                                        <div style="position: relative;">
+                                            <span class="performance-rank ${rankClass}">
+                                                ${video.performance_rank.toFixed(2)}
+                                            </span>
+                                            ${video.ranking_breakdown ? `
+                                                <button class="ranking-details-btn" onclick="toggleRankingDetails('${video.s3Key}')" style="margin-left: 8px; padding: 2px 8px; font-size: 11px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">ℹ️</button>
+                                                <div id="ranking-details-${video.s3Key}" class="ranking-details-dropdown" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 5px; background: white; border: 1px solid #ccc; border-radius: 5px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1000; min-width: 250px;">
+                                                    <h4 style="margin: 0 0 10px 0; font-size: 14px;">Ranking Breakdown</h4>
+                                                    <div style="font-size: 12px; line-height: 1.6;">
+                                                        <div><strong>Views Rank:</strong> ${video.ranking_breakdown.views_rank} (${(video.ranking_breakdown.views || 0).toLocaleString()} views)</div>
+                                                        <div><strong>Likes Rank:</strong> ${video.ranking_breakdown.likes_rank} (${(video.ranking_breakdown.likes || 0).toLocaleString()} likes)</div>
+                                                        <div><strong>Engagement Rank:</strong> ${video.ranking_breakdown.engagement_rank} (${(video.ranking_breakdown.engagement_proxy || 0).toFixed(3)} ratio)</div>
+                                                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                                                            <strong>Composite Rank:</strong> ${video.performance_rank.toFixed(2)}<br>
+                                                            <small style="color: #666;">Average of the three ranks above</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ` : ''}
+                                        </div>
                                     </td>
                                     <td>${(video.views || 0).toLocaleString()}</td>
                                     <td>${(video.likes || 0).toLocaleString()}</td>
@@ -742,6 +761,28 @@
                 minute: '2-digit'
             });
         }
+
+        function toggleRankingDetails(s3Key) {
+            const dropdown = document.getElementById(`ranking-details-${s3Key}`);
+            if (dropdown) {
+                const isVisible = dropdown.style.display !== 'none';
+                // Close all other dropdowns
+                document.querySelectorAll('.ranking-details-dropdown').forEach(dd => {
+                    dd.style.display = 'none';
+                });
+                // Toggle this one
+                dropdown.style.display = isVisible ? 'none' : 'block';
+            }
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.ranking-details-btn') && !event.target.closest('.ranking-details-dropdown')) {
+                document.querySelectorAll('.ranking-details-dropdown').forEach(dd => {
+                    dd.style.display = 'none';
+                });
+            }
+        });
 
         // Load analysis on page load
         loadAnalysis();

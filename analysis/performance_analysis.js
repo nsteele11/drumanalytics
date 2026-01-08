@@ -104,9 +104,18 @@ function standardizeAndDeriveMetrics(videos) {
   const likesRank = calculateRanks(processedVideos, 'likes', true);
   const engagementRank = calculateRanks(processedVideos, 'engagement_proxy', true);
 
-  // Add performance rank to each video
+  // Add performance rank and ranking breakdown to each video
   processedVideos.forEach((video, idx) => {
-    video.performance_rank = (viewsRank[idx] + likesRank[idx] + engagementRank[idx]) / 3;
+    const avgRank = (viewsRank[idx] + likesRank[idx] + engagementRank[idx]) / 3;
+    video.performance_rank = avgRank;
+    video.ranking_breakdown = {
+      views_rank: viewsRank[idx],
+      likes_rank: likesRank[idx],
+      engagement_rank: engagementRank[idx],
+      views: video.views || 0,
+      likes: video.likes || 0,
+      engagement_proxy: video.engagement_proxy || 0
+    };
   });
 
   return processedVideos;
@@ -133,9 +142,22 @@ function classifyMetadata(video) {
     }
   }
 
-  // Video type (categorical)
+  // Video type (categorical) - already exists, ensure it's included
   if (video.videoType) {
     classifications.video_type = video.videoType;
+  }
+
+  // Shock value classification (numeric → categorical)
+  if (video.shockValue !== null && video.shockValue !== undefined) {
+    if (video.shockValue <= 50) {
+      classifications.shock_value_bucket = '0-50';
+    } else if (video.shockValue <= 75) {
+      classifications.shock_value_bucket = '51-75';
+    } else if (video.shockValue <= 85) {
+      classifications.shock_value_bucket = '76-85';
+    } else {
+      classifications.shock_value_bucket = '86-100';
+    }
   }
 
   // Duration buckets (numeric → categorical)
@@ -174,24 +196,74 @@ function classifyMetadata(video) {
     } else {
       classifications.energy_level = 'high';
     }
+    // Also include raw energy value for analysis
+    classifications.energy = video.energy;
   }
 
-  // Genre classification (categorical)
+  // Onsets classification (numeric → categorical)
+  if (video.onsets !== null && video.onsets !== undefined) {
+    // Calculate onsets per second for bucketing
+    const onsetsPerSecond = video.duration > 0 ? video.onsets / video.duration : 0;
+    if (onsetsPerSecond < 2) {
+      classifications.onsets_bucket = 'low';
+    } else if (onsetsPerSecond <= 4) {
+      classifications.onsets_bucket = 'medium';
+    } else {
+      classifications.onsets_bucket = 'high';
+    }
+    // Also include raw onsets count for analysis
+    classifications.onsets = video.onsets;
+  }
+
+  // Genre classification - individual genres from array
   if (video.genres && Array.isArray(video.genres) && video.genres.length > 0) {
     classifications.primary_genre = video.genres[0];
     classifications.has_genre = true;
+    // Add each individual genre as a separate classification
+    video.genres.forEach(genre => {
+      if (genre && genre.trim()) {
+        classifications[`genre:${genre.trim().toLowerCase()}`] = genre.trim();
+      }
+    });
   } else {
     classifications.has_genre = false;
   }
 
+  // Hashtag classification - individual hashtags from comma-separated strings
+  if (video.igHashtags && video.igHashtags.trim().length > 0) {
+    const hashtags = video.igHashtags.split(',').map(h => h.trim()).filter(h => h.length > 0);
+    hashtags.forEach(hashtag => {
+      // Remove # if present for consistency
+      const cleanTag = hashtag.replace(/^#/, '').trim().toLowerCase();
+      if (cleanTag) {
+        classifications[`ig_hashtag:${cleanTag}`] = hashtag.trim();
+      }
+    });
+  }
+
+  if (video.tiktokHashtags && video.tiktokHashtags.trim().length > 0) {
+    const hashtags = video.tiktokHashtags.split(',').map(h => h.trim()).filter(h => h.length > 0);
+    hashtags.forEach(hashtag => {
+      // Remove # if present for consistency
+      const cleanTag = hashtag.replace(/^#/, '').trim().toLowerCase();
+      if (cleanTag) {
+        classifications[`tiktok_hashtag:${cleanTag}`] = hashtag.trim();
+      }
+    });
+  }
+
   // Artist popularity (numeric → categorical)
   if (video.artistFollowers !== null && video.artistFollowers !== undefined) {
-    if (video.artistFollowers < 10000) {
-      classifications.artist_size = 'small';
-    } else if (video.artistFollowers <= 100000) {
-      classifications.artist_size = 'medium';
+    if (video.artistFollowers < 100000) {
+      classifications.artist_size = '<100k';
+    } else if (video.artistFollowers < 1000000) {
+      classifications.artist_size = '100k-1M';
+    } else if (video.artistFollowers < 3000000) {
+      classifications.artist_size = '1M-3M';
+    } else if (video.artistFollowers < 10000000) {
+      classifications.artist_size = '3M-10M';
     } else {
-      classifications.artist_size = 'large';
+      classifications.artist_size = '>10M';
     }
   }
 
@@ -241,11 +313,25 @@ function computeLiftAnalysis(videos) {
     Object.entries(classifications).forEach(([feature, value]) => {
       if (value === null || value === undefined) return;
       
-      const key = `${feature}:${value}`;
+      // Handle special classification keys (genre:xxx, hashtag:xxx)
+      // For these, use the value as the feature name and the original key as part of the identifier
+      let featureName = feature;
+      let featureValue = String(value);
+      
+      if (feature.startsWith('genre:')) {
+        featureName = 'genre';
+        featureValue = value; // Use the genre name as the value
+      } else if (feature.startsWith('ig_hashtag:') || feature.startsWith('tiktok_hashtag:')) {
+        const platform = feature.startsWith('ig_hashtag:') ? 'ig_hashtag' : 'tiktok_hashtag';
+        featureName = platform;
+        featureValue = value; // Use the hashtag as the value
+      }
+      
+      const key = `${featureName}:${featureValue}`;
       if (!featureValueMap.has(key)) {
         featureValueMap.set(key, {
-          feature,
-          value: String(value),
+          feature: featureName,
+          value: featureValue,
           videos: []
         });
       }
@@ -309,11 +395,24 @@ function computeRankAssociation(videos) {
     Object.entries(classifications).forEach(([feature, value]) => {
       if (value === null || value === undefined) return;
       
-      const key = `${feature}:${value}`;
+      // Handle special classification keys (genre:xxx, hashtag:xxx)
+      let featureName = feature;
+      let featureValue = String(value);
+      
+      if (feature.startsWith('genre:')) {
+        featureName = 'genre';
+        featureValue = value;
+      } else if (feature.startsWith('ig_hashtag:') || feature.startsWith('tiktok_hashtag:')) {
+        const platform = feature.startsWith('ig_hashtag:') ? 'ig_hashtag' : 'tiktok_hashtag';
+        featureName = platform;
+        featureValue = value;
+      }
+      
+      const key = `${featureName}:${featureValue}`;
       if (!featureValueMap.has(key)) {
         featureValueMap.set(key, {
-          feature,
-          value: String(value),
+          feature: featureName,
+          value: featureValue,
           ranks: []
         });
       }
@@ -361,11 +460,24 @@ function computeDistributionSummary(videos) {
     Object.entries(classifications).forEach(([feature, value]) => {
       if (value === null || value === undefined) return;
       
-      if (!featureMap.has(feature)) {
-        featureMap.set(feature, []);
+      // Handle special classification keys (genre:xxx, hashtag:xxx)
+      let featureName = feature;
+      let featureValue = String(value);
+      
+      if (feature.startsWith('genre:')) {
+        featureName = 'genre';
+        featureValue = value;
+      } else if (feature.startsWith('ig_hashtag:') || feature.startsWith('tiktok_hashtag:')) {
+        const platform = feature.startsWith('ig_hashtag:') ? 'ig_hashtag' : 'tiktok_hashtag';
+        featureName = platform;
+        featureValue = value;
       }
-      featureMap.get(feature).push({
-        value: String(value),
+      
+      if (!featureMap.has(featureName)) {
+        featureMap.set(featureName, []);
+      }
+      featureMap.get(featureName).push({
+        value: featureValue,
         views_relative: video.views_relative,
         engagement_proxy: video.engagement_proxy
       });
@@ -432,15 +544,71 @@ function generateStructuredOutputs(videos) {
   const rankAssociation = computeRankAssociation(processedVideos);
   const distributionSummary = computeDistributionSummary(processedVideos);
 
+  // Define bucket ranges for display
+  const bucketRanges = {
+    'video_length_bucket': {
+      '<15s': '< 15 seconds',
+      '15–30s': '15-30 seconds',
+      '30–60s': '30-60 seconds',
+      '>60s': '> 60 seconds'
+    },
+    'bpm_bucket': {
+      '<100': '< 100 BPM',
+      '100–120': '100-120 BPM',
+      '120–140': '120-140 BPM',
+      '>140': '> 140 BPM'
+    },
+    'energy_level': {
+      'low': '< 0.3',
+      'medium': '0.3-0.6',
+      'high': '> 0.6'
+    },
+    'shock_value_bucket': {
+      '0-50': '0-50',
+      '51-75': '51-75',
+      '76-85': '76-85',
+      '86-100': '86-100'
+    },
+    'onsets_bucket': {
+      'low': '< 2 onsets/second',
+      'medium': '2-4 onsets/second',
+      'high': '> 4 onsets/second'
+    },
+    'artist_size': {
+      '<100k': '< 100,000 followers',
+      '100k-1M': '100,000-1,000,000 followers',
+      '1M-3M': '1,000,000-3,000,000 followers',
+      '3M-10M': '3,000,000-10,000,000 followers',
+      '>10M': '> 10,000,000 followers'
+    },
+    'track_popularity': {
+      'low': '< 40',
+      'medium': '40-60',
+      'high': '> 60'
+    }
+  };
+
+  // Helper function to get bucket range description
+  function getBucketRange(feature, value) {
+    if (bucketRanges[feature] && bucketRanges[feature][value]) {
+      return bucketRanges[feature][value];
+    }
+    return null;
+  }
+
   // 1. Early Signal Summary (from lift analysis)
-  const earlySignalSummary = liftAnalysis.map(lift => ({
-    feature: lift.feature,
-    value: lift.value,
-    sample_size: lift.sample_size,
-    lift_views: lift.lift_views,
-    lift_likes: lift.lift_likes,
-    confidence: lift.confidence
-  }));
+  const earlySignalSummary = liftAnalysis.map(lift => {
+    const bucketRange = getBucketRange(lift.feature, lift.value);
+    return {
+      feature: lift.feature,
+      value: lift.value,
+      bucket_range: bucketRange,
+      sample_size: lift.sample_size,
+      lift_views: lift.lift_views,
+      lift_likes: lift.lift_likes,
+      confidence: lift.confidence
+    };
+  });
 
   // 2. "What Seems to Be Working" List
   // Rank by highest lift and consistency (appears in multiple top-ranked videos)
@@ -454,7 +622,21 @@ function generateStructuredOutputs(videos) {
     const classifications = classifyMetadata(video);
     Object.entries(classifications).forEach(([feature, value]) => {
       if (value === null || value === undefined) return;
-      const key = `${feature}:${value}`;
+      
+      // Handle special classification keys (genre:xxx, hashtag:xxx)
+      let featureName = feature;
+      let featureValue = String(value);
+      
+      if (feature.startsWith('genre:')) {
+        featureName = 'genre';
+        featureValue = value;
+      } else if (feature.startsWith('ig_hashtag:') || feature.startsWith('tiktok_hashtag:')) {
+        const platform = feature.startsWith('ig_hashtag:') ? 'ig_hashtag' : 'tiktok_hashtag';
+        featureName = platform;
+        featureValue = value;
+      }
+      
+      const key = `${featureName}:${featureValue}`;
       featureCountsInTopVideos.set(key, (featureCountsInTopVideos.get(key) || 0) + 1);
     });
   });
@@ -463,10 +645,12 @@ function generateStructuredOutputs(videos) {
     const key = `${lift.feature}:${lift.value}`;
     const appearancesInTopVideos = featureCountsInTopVideos.get(key) || 0;
     const consistencyScore = appearancesInTopVideos / top30Percent;
+    const bucketRange = getBucketRange(lift.feature, lift.value);
 
     return {
       feature: lift.feature,
       value: lift.value,
+      bucket_range: bucketRange,
       lift_views: lift.lift_views,
       lift_likes: lift.lift_likes,
       appearances_in_top_30_percent: appearancesInTopVideos,
@@ -491,7 +675,21 @@ function generateStructuredOutputs(videos) {
     const classifications = classifyMetadata(video);
     Object.entries(classifications).forEach(([feature, value]) => {
       if (value === null || value === undefined) return;
-      const key = `${feature}:${value}`;
+      
+      // Handle special classification keys (genre:xxx, hashtag:xxx)
+      let featureName = feature;
+      let featureValue = String(value);
+      
+      if (feature.startsWith('genre:')) {
+        featureName = 'genre';
+        featureValue = value;
+      } else if (feature.startsWith('ig_hashtag:') || feature.startsWith('tiktok_hashtag:')) {
+        const platform = feature.startsWith('ig_hashtag:') ? 'ig_hashtag' : 'tiktok_hashtag';
+        featureName = platform;
+        featureValue = value;
+      }
+      
+      const key = `${featureName}:${featureValue}`;
       topVideoClassifications.set(key, (topVideoClassifications.get(key) || 0) + 1);
     });
   });
@@ -503,6 +701,10 @@ function generateStructuredOutputs(videos) {
 
     Object.entries(videoClassifications).forEach(([feature, value]) => {
       if (value === null || value === undefined) return;
+      // Skip internal classification keys (genre:xxx, hashtag:xxx)
+      if (feature.startsWith('genre:') || feature.startsWith('ig_hashtag:') || feature.startsWith('tiktok_hashtag:')) {
+        return;
+      }
       const key = `${feature}:${value}`;
       if (topVideoClassifications.has(key)) {
         overlapTraits.push({ feature, value });
@@ -520,6 +722,7 @@ function generateStructuredOutputs(videos) {
       likes: video.likes || 0,
       engagement_proxy: Math.round((video.engagement_proxy || 0) * 1000) / 1000,
       performance_rank: Math.round((video.performance_rank || 0) * 100) / 100,
+      ranking_breakdown: video.ranking_breakdown || null,
       metadata_overlap_with_top_30_percent: {
         overlap_count: overlapTraits.length,
         traits: overlapTraits
