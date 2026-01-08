@@ -730,7 +730,7 @@ function generateStructuredOutputs(videos) {
       unique_traits: uniqueTraits
     };
   })
-  .sort((a, b) => b.performance_rank - a.performance_rank);
+  .sort((a, b) => a.performance_rank - b.performance_rank);
 
   return {
     analysis_metadata: {
