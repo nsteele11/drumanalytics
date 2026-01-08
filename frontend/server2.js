@@ -10,6 +10,7 @@ import fs from "fs";
 import { Readable } from "stream";
 import { analyzeVideo } from "../analysis/analyze_video.js";
 import { extractVideoSnapshot } from "../analysis/extract_snapshot.js";
+import { generateStructuredOutputs } from "../analysis/performance_analysis.js";
 import spotifyRoutes from "./spotifyRoutes.js";
 
 dotenv.config();
@@ -727,6 +728,126 @@ app.get("/api/videos/:s3Key/hashtag-suggestions", async (req, res) => {
   } catch (err) {
     console.error("Error generating hashtag suggestions:", err);
     res.status(500).json({ error: "Failed to generate suggestions", message: err.message });
+  }
+});
+
+// ----------------------
+// Performance Analysis Endpoint
+// ----------------------
+app.get("/api/performance-analysis", async (req, res) => {
+  try {
+    if (!process.env.S3_BUCKET_NAME) {
+      console.error("S3_BUCKET_NAME environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    // Get all videos
+    const listCommand = new ListObjectsV2Command({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Prefix: "results/",
+    });
+
+    const listResponse = await s3.send(listCommand);
+    
+    if (!listResponse.Contents || listResponse.Contents.length === 0) {
+      return res.json({
+        error: "No videos found",
+        early_signal_summary: [],
+        what_seems_working: [],
+        per_video_comparison: []
+      });
+    }
+
+    // Fetch metadata for each video
+    const videos = [];
+    
+    for (const obj of listResponse.Contents) {
+      if (!obj.Key || !obj.Key.endsWith('.json')) continue;
+      
+      try {
+        const getMetadataCommand = new GetObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME,
+          Key: obj.Key,
+        });
+
+        const metadataResponse = await s3.send(getMetadataCommand);
+        const metadataStream = metadataResponse.Body;
+        
+        const metadataText = await new Promise((resolve, reject) => {
+          const chunks = [];
+          metadataStream.on('data', (chunk) => chunks.push(chunk));
+          metadataStream.on('end', () => {
+            try {
+              resolve(Buffer.concat(chunks).toString('utf-8'));
+            } catch (err) {
+              reject(err);
+            }
+          });
+          metadataStream.on('error', reject);
+        });
+
+        const metadata = JSON.parse(metadataText);
+        
+        // Map to the format expected by the analysis module
+        const videoData = {
+          s3Key: metadata.s3Key || obj.Key.replace('results/', '').replace('.json', ''),
+          originalFilename: metadata.originalFilename,
+          videoType: metadata.videoType || null,
+          artistName: metadata.artistName || metadata.spotify?.artist?.name || 'Unknown Artist',
+          trackName: metadata.trackName || metadata.spotify?.track?.name || 'Unknown Track',
+          album: metadata.spotify?.track?.album || null,
+          releaseDate: metadata.spotify?.track?.release_date || null,
+          popularity: metadata.spotify?.track?.popularity || null,
+          artistFollowers: metadata.spotify?.artist?.followers || null,
+          genres: metadata.spotify?.artist?.genres || [],
+          albumImageUrl: metadata.spotify?.track?.album_image_url || null,
+          snapshotKey: metadata.snapshotKey || null,
+          analyzedAt: metadata.analyzedAt || null,
+          uploadTimestamp: metadata.s3Key ? parseInt(metadata.s3Key.split('-')[0]) : null,
+          // Social media metrics
+          igHashtags: metadata.igHashtags || null,
+          tiktokHashtags: metadata.tiktokHashtags || null,
+          igViews: metadata.igViews || null,
+          igLikes: metadata.igLikes || null,
+          tiktokViews: metadata.tiktokViews || null,
+          tiktokLikes: metadata.tiktokLikes || null,
+          postedDate: metadata.postedDate || null,
+          metricsUpdatedAt: metadata.metricsUpdatedAt || null,
+          // Analysis data
+          duration: metadata.analysis?.duration || null,
+          size_mb: metadata.analysis?.size_mb || null,
+          resolution: metadata.analysis?.video ? `${metadata.analysis.video.width}x${metadata.analysis.video.height}` : null,
+          videoCodec: metadata.analysis?.video?.codec || null,
+          fps: metadata.analysis?.video?.fps || null,
+          audioCodec: metadata.analysis?.audio?.codec || null,
+          sampleRate: metadata.analysis?.audio?.sample_rate || null,
+          bpm: metadata.analysis?.bpm || null,
+          pitch: metadata.analysis?.pitch || null,
+          pitchConfidence: metadata.analysis?.pitchConfidence || null,
+          onsets: metadata.analysis?.onsets || null,
+          onsetRate: metadata.analysis?.onsetRate || null,
+          energy: metadata.analysis?.energy || null,
+          silenceRatio: metadata.analysis?.silenceRatio || null,
+          tempoSpikes: metadata.analysis?.tempoSpikes || null,
+          volumeSpikes: metadata.analysis?.volumeSpikes || null,
+          unusualPatterns: metadata.analysis?.unusualPatterns || null,
+          shockValue: metadata.analysis?.shockValue || null,
+        };
+
+        videos.push(videoData);
+      } catch (err) {
+        console.error(`Error processing metadata for ${obj.Key}:`, err);
+        // Continue with next video
+      }
+    }
+
+    // Run performance analysis
+    const analysisResults = generateStructuredOutputs(videos);
+    
+    res.json(analysisResults);
+  } catch (err) {
+    console.error("Error performing analysis:", err);
+    res.status(500).json({ error: "Failed to perform analysis", message: err.message });
   }
 });
 
