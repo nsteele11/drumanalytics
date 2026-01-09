@@ -269,12 +269,14 @@ function classifyMetadata(video) {
 
   // Track popularity (numeric → categorical)
   if (video.popularity !== null && video.popularity !== undefined) {
-    if (video.popularity < 40) {
-      classifications.track_popularity = 'low';
-    } else if (video.popularity <= 60) {
-      classifications.track_popularity = 'medium';
+    if (video.popularity < 50) {
+      classifications.track_popularity = '<50';
+    } else if (video.popularity <= 70) {
+      classifications.track_popularity = '51-70';
+    } else if (video.popularity <= 84) {
+      classifications.track_popularity = '71-84';
     } else {
-      classifications.track_popularity = 'high';
+      classifications.track_popularity = '>84';
     }
   }
 
@@ -582,9 +584,10 @@ function generateStructuredOutputs(videos) {
       '>10M': '> 10,000,000 followers'
     },
     'track_popularity': {
-      'low': '< 40',
-      'medium': '40-60',
-      'high': '> 60'
+      '<50': '< 50',
+      '51-70': '51-70',
+      '71-84': '71-84',
+      '>84': '> 84'
     }
   };
 

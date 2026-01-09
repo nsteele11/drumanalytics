@@ -220,6 +220,35 @@ let currentTrackMetadata = null;
 let comparisonTracks = [];
 let allArtistTracks = []; // Store all tracks for the selected artist
 
+// Load comparison tracks from localStorage on page load
+function loadComparisonTracksFromStorage() {
+    try {
+        const savedTracks = localStorage.getItem('prerecording_comparison_tracks');
+        if (savedTracks) {
+            comparisonTracks = JSON.parse(savedTracks);
+            if (comparisonTracks.length > 0) {
+                updateComparisonTable();
+                comparisonSection.style.display = 'block';
+            }
+        }
+    } catch (err) {
+        console.error('Error loading comparison tracks from storage:', err);
+        comparisonTracks = [];
+    }
+}
+
+// Save comparison tracks to localStorage
+function saveComparisonTracksToStorage() {
+    try {
+        localStorage.setItem('prerecording_comparison_tracks', JSON.stringify(comparisonTracks));
+    } catch (err) {
+        console.error('Error saving comparison tracks to storage:', err);
+    }
+}
+
+// Load tracks when page loads
+loadComparisonTracksFromStorage();
+
 const artistResults = document.getElementById('artist-results');
 const trackList = document.getElementById('track-list');
 const trackSearchInput = document.getElementById('track-search');
@@ -389,6 +418,9 @@ async function addTrackToComparison(trackId) {
         // Update table
         updateComparisonTable();
 
+        // Save to localStorage
+        saveComparisonTracksToStorage();
+
         // Show comparison section
         comparisonSection.style.display = 'block';
         
@@ -419,6 +451,9 @@ addButton.addEventListener('click', async () => {
 
     // Update table
     updateComparisonTable();
+
+    // Save to localStorage
+    saveComparisonTracksToStorage();
 
     // Show comparison section
     comparisonSection.style.display = 'block';
@@ -472,6 +507,7 @@ function updateComparisonTable() {
         removeBtn.addEventListener('click', () => {
             comparisonTracks.splice(index, 1);
             updateComparisonTable();
+            saveComparisonTracksToStorage(); // Save after removal
             if (comparisonTracks.length === 0) {
                 comparisonSection.style.display = 'none';
             }
@@ -488,6 +524,12 @@ clearButton.addEventListener('click', () => {
     if (confirm('Clear all tracks from comparison?')) {
         comparisonTracks = [];
         comparisonSection.style.display = 'none';
+        // Clear from localStorage
+        try {
+            localStorage.removeItem('prerecording_comparison_tracks');
+        } catch (err) {
+            console.error('Error clearing comparison tracks from storage:', err);
+        }
     }
 });
 
