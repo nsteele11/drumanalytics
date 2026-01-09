@@ -220,13 +220,33 @@ let currentTrackMetadata = null;
 let comparisonTracks = [];
 let allArtistTracks = []; // Store all tracks for the selected artist
 
+const artistResults = document.getElementById('artist-results');
+const trackList = document.getElementById('track-list');
+const trackSearchInput = document.getElementById('track-search');
+const addButton = document.getElementById('addToComparison');
+const comparisonSection = document.getElementById('comparisonSection');
+const comparisonTableBody = document.getElementById('comparisonTableBody');
+const clearButton = document.getElementById('clearComparison');
+
+// Save comparison tracks to localStorage
+function saveComparisonTracksToStorage() {
+    try {
+        localStorage.setItem('prerecording_comparison_tracks', JSON.stringify(comparisonTracks));
+        console.log('Saved tracks to localStorage:', comparisonTracks.length);
+    } catch (err) {
+        console.error('Error saving comparison tracks to storage:', err);
+    }
+}
+
 // Load comparison tracks from localStorage on page load
 function loadComparisonTracksFromStorage() {
     try {
         const savedTracks = localStorage.getItem('prerecording_comparison_tracks');
         if (savedTracks) {
-            comparisonTracks = JSON.parse(savedTracks);
-            if (comparisonTracks.length > 0) {
+            const parsed = JSON.parse(savedTracks);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                comparisonTracks = parsed;
+                console.log('Loaded tracks from localStorage:', comparisonTracks.length);
                 updateComparisonTable();
                 comparisonSection.style.display = 'block';
             }
@@ -237,25 +257,14 @@ function loadComparisonTracksFromStorage() {
     }
 }
 
-// Save comparison tracks to localStorage
-function saveComparisonTracksToStorage() {
-    try {
-        localStorage.setItem('prerecording_comparison_tracks', JSON.stringify(comparisonTracks));
-    } catch (err) {
-        console.error('Error saving comparison tracks to storage:', err);
-    }
+// Load tracks when page loads (after DOM elements are available)
+// Use DOMContentLoaded to ensure DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadComparisonTracksFromStorage);
+} else {
+    // DOM is already ready
+    loadComparisonTracksFromStorage();
 }
-
-// Load tracks when page loads
-loadComparisonTracksFromStorage();
-
-const artistResults = document.getElementById('artist-results');
-const trackList = document.getElementById('track-list');
-const trackSearchInput = document.getElementById('track-search');
-const addButton = document.getElementById('addToComparison');
-const comparisonSection = document.getElementById('comparisonSection');
-const comparisonTableBody = document.getElementById('comparisonTableBody');
-const clearButton = document.getElementById('clearComparison');
 
 /* -----------------------------
    ARTIST SEARCH
@@ -510,6 +519,12 @@ function updateComparisonTable() {
             saveComparisonTracksToStorage(); // Save after removal
             if (comparisonTracks.length === 0) {
                 comparisonSection.style.display = 'none';
+                // Clear from localStorage when empty
+                try {
+                    localStorage.removeItem('prerecording_comparison_tracks');
+                } catch (err) {
+                    console.error('Error clearing comparison tracks from storage:', err);
+                }
             }
         });
 
