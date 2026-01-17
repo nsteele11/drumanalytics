@@ -47,48 +47,126 @@ router.get("/search/artists", async (req, res) => {
 });
 
 /**
- * GET /api/spotify/search/tracks?artistId=xxx&q=songName
- * Returns tracks for a given artist filtered by query
- * Uses pagination to get up to 200 tracks (not just top 10)
+ * GET /api/spotify/search/tracks?q=songName&artistId=xxx (optional)
+ * Returns tracks from all artists based on search query
+ * If artistId is provided, filters to that artist's tracks only
+ * If artistId is not provided, searches across all artists and includes artist info
  */
 router.get("/search/tracks", async (req, res) => {
   const artistId = req.query.artistId;
   const query = req.query.q || "";
 
-  if (!artistId) {
-    return res.status(400).json({ error: "artistId is required" });
+  if (!query) {
+    return res.status(400).json({ error: "query (q) parameter is required" });
   }
 
   try {
     const token = await getSpotifyToken();
 
-    // First, get the artist name to search for tracks
-    const artistRes = await fetch(
-      `https://api.spotify.com/v1/artists/${artistId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
+    if (artistId) {
+      // Existing behavior: search tracks for a specific artist
+      const artistRes = await fetch(
+        `https://api.spotify.com/v1/artists/${artistId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
         }
+      );
+
+      if (!artistRes.ok) {
+        throw new Error(`Failed to get artist: ${artistRes.status}`);
       }
-    );
 
-    if (!artistRes.ok) {
-      throw new Error(`Failed to get artist: ${artistRes.status}`);
-    }
+      const artistData = await artistRes.json();
+      const artistName = artistData.name;
 
-    const artistData = await artistRes.json();
-    const artistName = artistData.name;
+      // Search for tracks by this artist using search API with pagination
+      let allTracks = [];
+      let offset = 0;
+      const limit = 50;
+      const maxTracks = 200;
 
-    // Search for tracks by this artist using search API with pagination
-    // Use pagination to get more results (up to 200 tracks)
-    let allTracks = [];
-    let offset = 0;
-    const limit = 50; // Max per request
-    const maxTracks = 200; // Limit total to avoid too many API calls
+      while (offset < maxTracks) {
+        const searchRes = await fetch(
+          `https://api.spotify.com/v1/search?q=artist:"${encodeURIComponent(artistName)}"&type=track&limit=${limit}&offset=${offset}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
 
-    while (offset < maxTracks) {
+        if (!searchRes.ok) {
+          console.warn(`Failed to fetch tracks at offset ${offset}: ${searchRes.status}`);
+          break;
+        }
+
+        const searchData = await searchRes.json();
+        const tracks = searchData.tracks.items;
+
+        if (tracks.length === 0) {
+          break;
+        }
+
+        const artistTracks = tracks
+          .filter(track => track.artists.some(artist => artist.id === artistId))
+          .map(track => ({
+            id: track.id,
+            name: track.name,
+            album: track.album.name,
+            albumType: track.album.album_type,
+            releaseDate: track.album.release_date,
+            preview_url: track.preview_url
+          }));
+
+        allTracks = [...allTracks, ...artistTracks];
+
+        if (tracks.length < limit) {
+          break;
+        }
+
+        offset += limit;
+      }
+
+      // Remove duplicates by track ID, preferring tracks from albums
+      const trackMap = new Map();
+      const getAlbumPriority = (albumType) => {
+        if (albumType === 'album') return 3;
+        if (albumType === 'single') return 2;
+        if (albumType === 'compilation') return 1;
+        return 0;
+      };
+      
+      allTracks.forEach(track => {
+        if (!trackMap.has(track.id)) {
+          trackMap.set(track.id, track);
+        } else {
+          const existingTrack = trackMap.get(track.id);
+          const existingPriority = getAlbumPriority(existingTrack.albumType);
+          const newPriority = getAlbumPriority(track.albumType);
+          if (newPriority > existingPriority) {
+            trackMap.set(track.id, track);
+          }
+        }
+      });
+      
+      const uniqueTracks = Array.from(trackMap.values());
+
+      // Filter tracks by the search query
+      let filteredTracks = uniqueTracks;
+      if (query) {
+        filteredTracks = uniqueTracks.filter(track => 
+          track.name.toLowerCase().includes(query.toLowerCase())
+        );
+      }
+
+      filteredTracks.sort((a, b) => a.name.localeCompare(b.name));
+      res.json(filteredTracks);
+    } else {
+      // New behavior: search tracks across all artists
       const searchRes = await fetch(
-        `https://api.spotify.com/v1/search?q=artist:"${encodeURIComponent(artistName)}"&type=track&limit=${limit}&offset=${offset}`,
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=20`,
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -97,81 +175,24 @@ router.get("/search/tracks", async (req, res) => {
       );
 
       if (!searchRes.ok) {
-        console.warn(`Failed to fetch tracks at offset ${offset}: ${searchRes.status}`);
-        break;
+        throw new Error(`Failed to search tracks: ${searchRes.status}`);
       }
 
       const searchData = await searchRes.json();
-      const tracks = searchData.tracks.items;
+      const tracks = searchData.tracks.items.map(track => ({
+        id: track.id,
+        name: track.name,
+        artist: track.artists[0]?.name || 'Unknown',
+        artistId: track.artists[0]?.id || null,
+        album: track.album.name,
+        albumType: track.album.album_type,
+        releaseDate: track.album.release_date,
+        preview_url: track.preview_url,
+        popularity: track.popularity
+      }));
 
-      if (tracks.length === 0) {
-        break;
-      }
-
-      // Filter to only tracks where this artist is the primary artist
-      const artistTracks = tracks
-        .filter(track => track.artists.some(artist => artist.id === artistId))
-        .map(track => ({
-          id: track.id,
-          name: track.name,
-          album: track.album.name,
-          albumType: track.album.album_type, // 'album', 'single', 'compilation'
-          releaseDate: track.album.release_date,
-          preview_url: track.preview_url
-        }));
-
-      allTracks = [...allTracks, ...artistTracks];
-
-      // If we got fewer than limit, we've reached the end
-      if (tracks.length < limit) {
-        break;
-      }
-
-      offset += limit;
+      res.json(tracks);
     }
-
-    // Remove duplicates by track ID, preferring tracks from albums over singles/compilations
-    const trackMap = new Map();
-    
-    // Priority order: album > single > compilation
-    const getAlbumPriority = (albumType) => {
-      if (albumType === 'album') return 3;
-      if (albumType === 'single') return 2;
-      if (albumType === 'compilation') return 1;
-      return 0;
-    };
-    
-    allTracks.forEach(track => {
-      if (!trackMap.has(track.id)) {
-        // First time seeing this track ID, add it
-        trackMap.set(track.id, track);
-      } else {
-        // We've seen this track before, check if we should replace it
-        const existingTrack = trackMap.get(track.id);
-        const existingPriority = getAlbumPriority(existingTrack.albumType);
-        const newPriority = getAlbumPriority(track.albumType);
-        
-        // Replace if new version has higher priority (prefer albums over singles/compilations)
-        if (newPriority > existingPriority) {
-          trackMap.set(track.id, track);
-        }
-      }
-    });
-    
-    const uniqueTracks = Array.from(trackMap.values());
-
-    // Filter tracks by the search query (case-insensitive) if provided
-    let filteredTracks = uniqueTracks;
-    if (query) {
-      filteredTracks = uniqueTracks.filter(track => 
-        track.name.toLowerCase().includes(query.toLowerCase())
-      );
-    }
-
-    // Sort by track name for easier browsing
-    filteredTracks.sort((a, b) => a.name.localeCompare(b.name));
-
-    res.json(filteredTracks);
   } catch (err) {
     console.error("Spotify track search error:", err);
     res.status(500).json({ error: "Failed to fetch tracks from Spotify" });

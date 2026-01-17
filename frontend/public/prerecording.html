@@ -36,7 +36,7 @@
             <!-- Track Search -->
             <div class="search-field">
                 <label>Track</label><br>
-                <input type="text" id="track-search" list="track-list" placeholder="Type or select track" autocomplete="off" disabled>
+                <input type="text" id="track-search" list="track-list" placeholder="Type track name (artist optional)" autocomplete="off">
                 <datalist id="track-list">
                     <!-- Options will be populated dynamically -->
                 </datalist>
@@ -59,6 +59,8 @@
                             <th>Artist Followers</th>
                             <th>Track Popularity</th>
                             <th>Release Date</th>
+                            <th>Success Score</th>
+                            <th>Success Rank</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -96,6 +98,8 @@
                                 <th>Popularity</th>
                                 <th>Genre</th>
                                 <th>Release Date</th>
+                                <th>Success Score</th>
+                                <th>Success Rank</th>
                             </tr>
                         </thead>
                         <tbody id="artistTracksTableBody">
@@ -200,6 +204,8 @@
                                     <th>Popularity</th>
                                     <th>Album</th>
                                     <th>Release Date</th>
+                                    <th>Success Score</th>
+                                    <th>Success Rank</th>
                                 </tr>
                             </thead>
                             <tbody id="topTracksTableBody">
@@ -219,6 +225,7 @@ let selectedTrackId = null;
 let currentTrackMetadata = null;
 let comparisonTracks = [];
 let allArtistTracks = []; // Store all tracks for the selected artist
+let allVideosData = null; // Cache for video data with success scores
 
 const artistResults = document.getElementById('artist-results');
 const trackList = document.getElementById('track-list');
@@ -260,10 +267,16 @@ function loadComparisonTracksFromStorage() {
 // Load tracks when page loads (after DOM elements are available)
 // Use DOMContentLoaded to ensure DOM is ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadComparisonTracksFromStorage);
+    document.addEventListener('DOMContentLoaded', async () => {
+        loadComparisonTracksFromStorage();
+        // Pre-fetch videos data for faster matching
+        await fetchVideosData();
+    });
 } else {
     // DOM is already ready
     loadComparisonTracksFromStorage();
+    // Pre-fetch videos data for faster matching
+    fetchVideosData();
 }
 
 /* -----------------------------
@@ -274,8 +287,9 @@ document.getElementById('artist-search').addEventListener('input', async (e) => 
     artistResults.innerHTML = '';
     if (!query) {
         selectedArtistId = null;
-        document.getElementById('track-search').disabled = true;
-        document.getElementById('track-search').value = '';
+        // Don't disable track search - allow searching without artist
+        // document.getElementById('track-search').disabled = true;
+        // document.getElementById('track-search').value = '';
         addButton.disabled = true;
         return;
     }
@@ -338,44 +352,117 @@ async function loadArtistTracks(artistId) {
 }
 
 /* -----------------------------
+   TRACK SEARCH RESULTS
+--------------------------------*/
+const trackResults = document.createElement('ul');
+trackResults.className = 'search-results';
+trackResults.id = 'track-results';
+trackResults.style.display = 'none';
+trackSearchInput.parentElement.appendChild(trackResults);
+
+/* -----------------------------
    TRACK SELECTION
 --------------------------------*/
+let trackSearchTimeout = null;
 trackSearchInput.addEventListener('input', async (e) => {
     const inputValue = e.target.value.trim();
     
-    if (!inputValue || !selectedArtistId) {
+    // Clear previous timeout
+    if (trackSearchTimeout) {
+        clearTimeout(trackSearchTimeout);
+    }
+    
+    if (!inputValue) {
+        trackResults.style.display = 'none';
+        trackResults.innerHTML = '';
         selectedTrackId = null;
         currentTrackMetadata = null;
         addButton.disabled = true;
         return;
     }
 
-    // Find the track that matches the input value
-    const matchedTrack = allArtistTracks.find(track => 
-        track.name.toLowerCase() === inputValue.toLowerCase()
-    );
+    // Debounce search
+    trackSearchTimeout = setTimeout(async () => {
+        if (selectedArtistId) {
+            // Artist is selected - use existing behavior
+            const matchedTrack = allArtistTracks.find(track => 
+                track.name.toLowerCase() === inputValue.toLowerCase()
+            );
 
-    if (matchedTrack) {
-        selectedTrackId = matchedTrack.id;
-        
-        // Fetch full metadata
-        try {
-            const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
-            currentTrackMetadata = await metaRes.json();
-            addButton.disabled = false;
-        } catch (err) {
-            console.error('Error fetching track metadata:', err);
-            alert('Failed to load track metadata');
-            addButton.disabled = true;
+            if (matchedTrack) {
+                selectedTrackId = matchedTrack.id;
+                trackResults.style.display = 'none';
+                
+                // Fetch full metadata
+                try {
+                    const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
+                    currentTrackMetadata = await metaRes.json();
+                    addButton.disabled = false;
+                } catch (err) {
+                    console.error('Error fetching track metadata:', err);
+                    alert('Failed to load track metadata');
+                    addButton.disabled = true;
+                }
+            } else {
+                selectedTrackId = null;
+                currentTrackMetadata = null;
+                addButton.disabled = true;
+            }
+        } else {
+            // No artist selected - search across all tracks
+            try {
+                const searchRes = await fetch(`/api/spotify/search/tracks?q=${encodeURIComponent(inputValue)}`);
+                if (!searchRes.ok) {
+                    throw new Error('Failed to search tracks');
+                }
+                
+                const tracks = await searchRes.json();
+                trackResults.innerHTML = '';
+                
+                if (tracks.length === 0) {
+                    trackResults.style.display = 'none';
+                } else {
+                    tracks.forEach(track => {
+                        const li = document.createElement('li');
+                        li.textContent = `${track.name} - ${track.artist}`;
+                        li.onclick = async () => {
+                            selectedTrackId = track.id;
+                            trackSearchInput.value = track.name;
+                            trackResults.style.display = 'none';
+                            trackResults.innerHTML = '';
+                            
+                            // Fetch full metadata
+                            try {
+                                const metaRes = await fetch(`/api/spotify/track/${selectedTrackId}`);
+                                currentTrackMetadata = await metaRes.json();
+                                
+                                // Show artist in the artist search field
+                                if (currentTrackMetadata.artist && currentTrackMetadata.artist.name) {
+                                    document.getElementById('artist-search').value = currentTrackMetadata.artist.name;
+                                    selectedArtistId = currentTrackMetadata.artist.id;
+                                }
+                                
+                                addButton.disabled = false;
+                            } catch (err) {
+                                console.error('Error fetching track metadata:', err);
+                                alert('Failed to load track metadata');
+                                addButton.disabled = true;
+                            }
+                        };
+                        trackResults.appendChild(li);
+                    });
+                    // Show results after populating
+                    trackResults.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Error searching tracks:', err);
+                trackResults.style.display = 'none';
+            }
         }
-    } else {
-        selectedTrackId = null;
-        currentTrackMetadata = null;
-        addButton.disabled = true;
-    }
+    }, 300); // 300ms debounce
 });
 
-// Handle selection from datalist dropdown
+// Handle selection from datalist dropdown (only when artist is selected)
 trackSearchInput.addEventListener('change', async (e) => {
     const inputValue = e.target.value.trim();
     
@@ -398,6 +485,13 @@ trackSearchInput.addEventListener('change', async (e) => {
                 addButton.disabled = true;
             }
         }
+    }
+});
+
+// Hide track results when clicking outside
+document.addEventListener('click', (e) => {
+    if (e.target !== trackSearchInput && !trackResults.contains(e.target)) {
+        trackResults.style.display = 'none';
     }
 });
 
@@ -478,9 +572,85 @@ addButton.addEventListener('click', async () => {
 });
 
 /* -----------------------------
+   FETCH VIDEOS DATA
+--------------------------------*/
+async function fetchVideosData() {
+    try {
+        const response = await fetch('/api/videos');
+        if (!response.ok) {
+            throw new Error('Failed to fetch videos');
+        }
+        const videos = await response.json();
+        allVideosData = videos;
+        return videos;
+    } catch (err) {
+        console.error('Error fetching videos data:', err);
+        allVideosData = [];
+        return [];
+    }
+}
+
+/* -----------------------------
+   MATCH TRACK WITH VIDEO
+--------------------------------*/
+function findMatchingVideo(trackMetadata) {
+    if (!allVideosData || allVideosData.length === 0) {
+        return null;
+    }
+
+    const trackId = trackMetadata.track?.id;
+    const trackName = trackMetadata.track?.name?.toLowerCase().trim();
+    const artistName = trackMetadata.artist?.name?.toLowerCase().trim();
+
+    // First try to match by Spotify track ID (most reliable)
+    if (trackId) {
+        const matchById = allVideosData.find(video => {
+            const videoTrackId = video.spotify?.track?.id;
+            return videoTrackId && videoTrackId === trackId;
+        });
+        if (matchById) return matchById;
+    }
+
+    // Fallback: match by track name + artist name (case-insensitive)
+    if (trackName && artistName) {
+        const matchByName = allVideosData.find(video => {
+            const videoTrackName = (video.trackName || video.spotify?.track?.name || '').toLowerCase().trim();
+            const videoArtistName = (video.artistName || video.spotify?.artist?.name || '').toLowerCase().trim();
+            return videoTrackName === trackName && videoArtistName === artistName;
+        });
+        if (matchByName) return matchByName;
+    }
+
+    return null;
+}
+
+/* -----------------------------
+   GET SUCCESS SCORE COLOR
+--------------------------------*/
+function getSuccessScoreColor(score) {
+    if (score >= 70) return '#28a745'; // Green - high success
+    if (score >= 40) return '#ffc107'; // Yellow - medium success
+    return '#dc3545'; // Red - low success
+}
+
+/* -----------------------------
+   GET SUCCESS RANK COLOR
+--------------------------------*/
+function getSuccessRankColor(rank) {
+    if (rank <= 3) return '#28a745'; // Green - top 3
+    if (rank <= 6) return '#ffc107'; // Yellow - top 6
+    return '#6c757d'; // Gray - lower ranks
+}
+
+/* -----------------------------
    UPDATE COMPARISON TABLE
 --------------------------------*/
-function updateComparisonTable() {
+async function updateComparisonTable() {
+    // Fetch videos data if not already cached
+    if (!allVideosData) {
+        await fetchVideosData();
+    }
+
     comparisonTableBody.innerHTML = '';
 
     comparisonTracks.forEach((metadata, index) => {
@@ -498,6 +668,25 @@ function updateComparisonTable() {
             ? metadata.track.popularity
             : 'N/A';
 
+        // Find matching video
+        const matchingVideo = findMatchingVideo(metadata);
+        const successScore = matchingVideo?.success_score;
+        const successRank = matchingVideo?.success_rank;
+
+        // Format success score and rank
+        let successScoreHtml = '—';
+        let successRankHtml = '—';
+        
+        if (successScore !== null && successScore !== undefined) {
+            const scoreColor = getSuccessScoreColor(successScore);
+            successScoreHtml = `<span style="font-weight: 600; color: ${scoreColor};">${successScore.toFixed(1)}</span>`;
+        }
+        
+        if (successRank !== null && successRank !== undefined) {
+            const rankColor = getSuccessRankColor(successRank);
+            successRankHtml = `<span style="font-weight: 600; color: ${rankColor};">#${successRank}</span>`;
+        }
+
         row.innerHTML = `
             <td>${escapeHtml(metadata.artist.name)}</td>
             <td>${escapeHtml(metadata.track.name)}</td>
@@ -506,6 +695,8 @@ function updateComparisonTable() {
             <td>${followers}</td>
             <td>${popularity}</td>
             <td>${escapeHtml(metadata.track.release_date || 'N/A')}</td>
+            <td>${successScoreHtml}</td>
+            <td>${successRankHtml}</td>
             <td>
                 <button class="remove-button" data-index="${index}">Remove</button>
             </td>
@@ -632,8 +823,37 @@ async function loadGenreData(genre) {
 
         // Display tracks
         if (tracks.length > 0) {
+            // Fetch videos data if not already cached
+            if (!allVideosData) {
+                await fetchVideosData();
+            }
+
             tracks.forEach((track, index) => {
                 const row = document.createElement('tr');
+                
+                // Find matching video
+                const trackMetadata = {
+                    track: { id: track.id, name: track.name },
+                    artist: { name: track.artist || '' }
+                };
+                const matchingVideo = findMatchingVideo(trackMetadata);
+                const successScore = matchingVideo?.success_score;
+                const successRank = matchingVideo?.success_rank;
+
+                // Format success score and rank
+                let successScoreHtml = '—';
+                let successRankHtml = '—';
+                
+                if (successScore !== null && successScore !== undefined) {
+                    const scoreColor = getSuccessScoreColor(successScore);
+                    successScoreHtml = `<span style="font-weight: 600; color: ${scoreColor};">${successScore.toFixed(1)}</span>`;
+                }
+                
+                if (successRank !== null && successRank !== undefined) {
+                    const rankColor = getSuccessRankColor(successRank);
+                    successRankHtml = `<span style="font-weight: 600; color: ${rankColor};">#${successRank}</span>`;
+                }
+                
                 row.innerHTML = `
                     <td>${index + 1}</td>
                     <td><a href="#" class="clickable-track" data-track-id="${track.id}">${escapeHtml(track.name)}</a></td>
@@ -641,6 +861,8 @@ async function loadGenreData(genre) {
                     <td>${track.popularity}</td>
                     <td>${escapeHtml(track.album || 'N/A')}</td>
                     <td>${escapeHtml(track.releaseDate || 'N/A')}</td>
+                    <td>${successScoreHtml}</td>
+                    <td>${successRankHtml}</td>
                 `;
                 
                 // Add click handler for track name
@@ -662,7 +884,7 @@ async function loadGenreData(genre) {
                 topTracksTableBody.appendChild(row);
             });
         } else {
-            topTracksTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No tracks found for this genre</td></tr>';
+            topTracksTableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">No tracks found for this genre</td></tr>';
         }
 
         genreLoading.style.display = 'none';
@@ -730,14 +952,42 @@ async function loadArtistPopularTracks(artistId) {
         artistAnalysisLoading.style.display = 'none';
 
         if (tracks.length === 0) {
-            artistTracksTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No tracks found for this artist</td></tr>';
+            artistTracksTableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">No tracks found for this artist</td></tr>';
         } else {
+            // Fetch videos data if not already cached
+            if (!allVideosData) {
+                await fetchVideosData();
+            }
+
             tracks.forEach((track, index) => {
                 const row = document.createElement('tr');
                 // Format genres - show first 3 genres, or 'N/A' if none
                 const genres = track.genres && track.genres.length > 0 
                     ? track.genres.slice(0, 3).join(', ') 
                     : 'N/A';
+                
+                // Find matching video
+                const trackMetadata = {
+                    track: { id: track.id, name: track.name },
+                    artist: { name: track.artist || '' }
+                };
+                const matchingVideo = findMatchingVideo(trackMetadata);
+                const successScore = matchingVideo?.success_score;
+                const successRank = matchingVideo?.success_rank;
+
+                // Format success score and rank
+                let successScoreHtml = '—';
+                let successRankHtml = '—';
+                
+                if (successScore !== null && successScore !== undefined) {
+                    const scoreColor = getSuccessScoreColor(successScore);
+                    successScoreHtml = `<span style="font-weight: 600; color: ${scoreColor};">${successScore.toFixed(1)}</span>`;
+                }
+                
+                if (successRank !== null && successRank !== undefined) {
+                    const rankColor = getSuccessRankColor(successRank);
+                    successRankHtml = `<span style="font-weight: 600; color: ${rankColor};">#${successRank}</span>`;
+                }
                 
                 row.innerHTML = `
                     <td>${index + 1}</td>
@@ -746,6 +996,8 @@ async function loadArtistPopularTracks(artistId) {
                     <td>${track.popularity}</td>
                     <td>${escapeHtml(genres)}</td>
                     <td>${escapeHtml(track.releaseDate || 'N/A')}</td>
+                    <td>${successScoreHtml}</td>
+                    <td>${successRankHtml}</td>
                 `;
                 
                 // Add click handler for track name

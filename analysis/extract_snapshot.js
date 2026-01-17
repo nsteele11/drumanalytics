@@ -62,3 +62,4 @@ export function extractVideoSnapshot(videoPath, outputPath, timestamp = null) {
 
 
 
+

@@ -60,152 +60,129 @@
         
         .analysis-section {
             background-color: #fff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 15px;
         }
         
         .analysis-section h2 {
             margin-top: 0;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             color: #333;
-            font-size: 24px;
+            font-size: 20px;
         }
         
         .analysis-section h3 {
             margin-top: 0;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             color: #555;
-            font-size: 18px;
+            font-size: 16px;
         }
         
         .metadata-info {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 5px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-bottom: 12px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
         }
         
         .metadata-item {
-            flex: 1;
-            min-width: 150px;
+            text-align: center;
         }
         
         .metadata-item strong {
             display: block;
             color: #666;
-            font-size: 12px;
+            font-size: 11px;
             text-transform: uppercase;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         
         .metadata-item span {
             display: block;
             color: #333;
-            font-size: 16px;
-            font-weight: 500;
-        }
-        
-        .signal-card {
-            background-color: #f9f9f9;
-            border-left: 4px solid #ffcc00;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 5px;
-        }
-        
-        .signal-card.positive {
-            border-left-color: #28a745;
-        }
-        
-        .signal-card.negative {
-            border-left-color: #dc3545;
-        }
-        
-        .signal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .signal-feature {
-            font-weight: 600;
-            color: #333;
-            font-size: 16px;
-        }
-        
-        .signal-value {
-            color: #666;
             font-size: 14px;
-        }
-        
-        .signal-metrics {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-        }
-        
-        .signal-metric {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .signal-metric-label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .signal-metric-value {
-            font-size: 18px;
             font-weight: 600;
-            color: #333;
         }
         
-        .signal-metric-value.positive {
-            color: #28a745;
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            font-size: 13px;
         }
         
-        .signal-metric-value.negative {
-            color: #dc3545;
+        .data-table th,
+        .data-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .data-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .data-table tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .data-table tr:last-child td {
+            border-bottom: none;
         }
         
         .video-comparison-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
+            margin-top: 8px;
+            font-size: 13px;
         }
         
         .video-comparison-table th,
         .video-comparison-table td {
-            padding: 12px;
+            padding: 8px 10px;
             text-align: left;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid #e9ecef;
         }
         
         .video-comparison-table th {
-            background-color: #f9f9f9;
+            background-color: #f8f9fa;
             font-weight: 600;
-            color: #333;
+            color: #495057;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             position: sticky;
             top: 0;
+            z-index: 10;
         }
         
         .video-comparison-table tr:hover {
-            background-color: #f9f9f9;
+            background-color: #f8f9fa;
+        }
+        
+        .video-comparison-table tr:last-child td {
+            border-bottom: none;
         }
         
         .performance-rank {
             font-weight: 600;
-            padding: 5px 10px;
+            padding: 3px 8px;
             border-radius: 3px;
             display: inline-block;
+            font-size: 12px;
         }
         
         .performance-rank.high {
@@ -225,28 +202,27 @@
         
         .overlap-count {
             display: inline-block;
-            padding: 3px 8px;
+            padding: 2px 6px;
             background-color: #e7f3ff;
             color: #004085;
             border-radius: 3px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
         }
         
         .traits-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 5px;
+            gap: 4px;
         }
         
         .trait-tag {
             display: inline-block;
-            padding: 3px 8px;
+            padding: 2px 6px;
             background-color: #e9ecef;
             color: #495057;
             border-radius: 3px;
-            font-size: 11px;
+            font-size: 10px;
         }
         
         .trait-tag.overlap {
@@ -259,35 +235,73 @@
             color: #856404;
         }
         
+        .lift-value {
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .lift-value.positive {
+            color: #28a745;
+        }
+        
+        .lift-value.negative {
+            color: #dc3545;
+        }
+        
+        .metric-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .metric-badge.positive {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .metric-badge.negative {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .metric-badge.neutral {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+        
         .empty-state {
             text-align: center;
-            padding: 40px;
+            padding: 20px;
             color: #666;
+            font-size: 13px;
         }
         
         .collapsible-section {
-            margin-top: 15px;
+            margin-top: 8px;
         }
         
         .collapsible-header {
             cursor: pointer;
-            padding: 10px;
-            background-color: #f0f0f0;
-            border-radius: 5px;
+            padding: 8px 12px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             user-select: none;
+            transition: background-color 0.2s;
         }
         
         .collapsible-header:hover {
-            background-color: #e0e0e0;
+            background-color: #e9ecef;
         }
         
         .collapsible-content {
             display: none;
-            padding: 15px;
-            margin-top: 10px;
+            padding: 10px 0;
+            margin-top: 8px;
         }
         
         .collapsible-content.expanded {
@@ -296,10 +310,28 @@
         
         .toggle-icon {
             transition: transform 0.2s;
+            font-size: 12px;
         }
         
         .collapsible-header.expanded .toggle-icon {
             transform: rotate(180deg);
+        }
+        
+        .section-description {
+            color: #6c757d;
+            margin-bottom: 10px;
+            font-size: 12px;
+            font-style: italic;
+        }
+        
+        .platform-header {
+            margin: 12px 0 8px 0;
+            color: #495057;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
     </style>
 </head>
@@ -337,9 +369,8 @@
                 <!-- Early Signal Summary -->
                 <div class="analysis-section">
                     <h2>Early Signal Summary</h2>
-                    <p style="color: #666; margin-bottom: 20px;">
-                        Features that show directional signals (lift > 1.0 indicates positive association). 
-                        <em>Note: All results are labeled as "early signal" and not statistically validated.</em>
+                    <p class="section-description">
+                        Features showing directional signals (lift > 1.0 = positive). <em>Early signal only, not statistically validated.</em>
                     </p>
                     <div id="earlySignals"></div>
                 </div>
@@ -347,8 +378,8 @@
                 <!-- What Seems to Be Working -->
                 <div class="analysis-section">
                     <h2>What Seems to Be Working</h2>
-                    <p style="color: #666; margin-bottom: 20px;">
-                        Top-performing metadata patterns ranked by lift and consistency with top 30% performers.
+                    <p class="section-description">
+                        Top-performing patterns ranked by lift and consistency with top 30% performers.
                     </p>
                     <div id="whatSeemsWorking"></div>
                 </div>
@@ -356,7 +387,7 @@
                 <!-- Per-Video Comparison -->
                 <div class="analysis-section">
                     <h2>Per-Video Comparison</h2>
-                    <p style="color: #666; margin-bottom: 20px;">
+                    <p class="section-description">
                         Individual video performance with metadata overlap against top 30% performers.
                     </p>
                     <div id="perVideoComparison"></div>
@@ -369,7 +400,7 @@
                         <span class="toggle-icon">▼</span>
                     </div>
                     <div class="collapsible-content">
-                        <p style="color: #666; margin-bottom: 20px;">
+                        <p class="section-description">
                             Average performance rank by metadata value. Positive values indicate above-median performance.
                         </p>
                         <div id="rankAssociation"></div>
@@ -383,7 +414,7 @@
                         <span class="toggle-icon">▼</span>
                     </div>
                     <div class="collapsible-content">
-                        <p style="color: #666; margin-bottom: 20px;">
+                        <p class="section-description">
                             Distribution statistics for each metadata feature.
                         </p>
                         <div id="distributionSummary"></div>
@@ -493,41 +524,42 @@
                 return;
             }
 
-            container.innerHTML = signals.map(signal => {
-                const avgLift = (signal.lift_views + signal.lift_likes) / 2;
-                const cardClass = avgLift > 1.0 ? 'positive' : avgLift < 1.0 ? 'negative' : '';
-                const bucketRange = signal.bucket_range ? ` <span style="font-size: 12px; color: #666; font-style: italic;">(${escapeHtml(signal.bucket_range)})</span>` : '';
-                
-                return `
-                    <div class="signal-card ${cardClass}">
-                        <div class="signal-header">
-                            <div>
-                                <span class="signal-feature">${escapeHtml(signal.feature)}</span>
-                                <span class="signal-value">: ${escapeHtml(signal.value)}</span>${bucketRange}
-                            </div>
-                            <span style="font-size: 12px; color: #666;">n=${signal.sample_size}</span>
-                        </div>
-                        <div class="signal-metrics">
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Views Lift</span>
-                                <span class="signal-metric-value ${signal.lift_views > 1.0 ? 'positive' : signal.lift_views < 1.0 ? 'negative' : ''}">
-                                    ${signal.lift_views.toFixed(2)}x
-                                </span>
-                            </div>
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Likes Lift</span>
-                                <span class="signal-metric-value ${signal.lift_likes > 1.0 ? 'positive' : signal.lift_likes < 1.0 ? 'negative' : ''}">
-                                    ${signal.lift_likes.toFixed(2)}x
-                                </span>
-                            </div>
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Confidence</span>
-                                <span class="signal-metric-value">${signal.confidence || 'early'}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            const tableHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>Value</th>
+                            <th>Range</th>
+                            <th>Sample Size</th>
+                            <th>Views Lift</th>
+                            <th>Likes Lift</th>
+                            <th>Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${signals.map(signal => {
+                            const viewsLiftClass = signal.lift_views > 1.0 ? 'positive' : signal.lift_views < 1.0 ? 'negative' : '';
+                            const likesLiftClass = signal.lift_likes > 1.0 ? 'positive' : signal.lift_likes < 1.0 ? 'negative' : '';
+                            const bucketRange = signal.bucket_range ? escapeHtml(signal.bucket_range) : '—';
+                            
+                            return `
+                                <tr>
+                                    <td><strong>${escapeHtml(signal.feature)}</strong></td>
+                                    <td>${escapeHtml(signal.value)}</td>
+                                    <td style="color: #6c757d; font-size: 11px;">${bucketRange}</td>
+                                    <td>${signal.sample_size}</td>
+                                    <td><span class="lift-value ${viewsLiftClass}">${signal.lift_views.toFixed(2)}x</span></td>
+                                    <td><span class="lift-value ${likesLiftClass}">${signal.lift_likes.toFixed(2)}x</span></td>
+                                    <td>${signal.confidence || 'early'}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
         }
 
         function displayWhatSeemsWorking(working) {
@@ -553,85 +585,56 @@
                 }
             });
 
-            // Helper function to render a card
-            function renderCard(item) {
-                const avgLift = (item.lift_views + item.lift_likes) / 2;
-                const cardClass = avgLift > 1.0 ? 'positive' : '';
-                const bucketRange = item.bucket_range ? ` <span style="font-size: 12px; color: #666; font-style: italic;">(${escapeHtml(item.bucket_range)})</span>` : '';
+            // Helper function to render a table section
+            function renderTableSection(items, title) {
+                if (items.length === 0) return '';
                 
                 return `
-                    <div class="signal-card ${cardClass}">
-                        <div class="signal-header">
-                            <div>
-                                <span class="signal-feature">${escapeHtml(item.feature)}</span>
-                                <span class="signal-value">: ${escapeHtml(item.value)}</span>${bucketRange}
-                            </div>
-                            <span style="font-size: 12px; color: #666;">n=${item.sample_size}</span>
-                        </div>
-                        <div class="signal-metrics">
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Views Lift</span>
-                                <span class="signal-metric-value ${item.lift_views > 1.0 ? 'positive' : 'negative'}">
-                                    ${item.lift_views.toFixed(2)}x
-                                </span>
-                            </div>
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Likes Lift</span>
-                                <span class="signal-metric-value ${item.lift_likes > 1.0 ? 'positive' : 'negative'}">
-                                    ${item.lift_likes.toFixed(2)}x
-                                </span>
-                            </div>
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Top 30% Appearances</span>
-                                <span class="signal-metric-value">${item.appearances_in_top_30_percent || 0}</span>
-                            </div>
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Consistency Score</span>
-                                <span class="signal-metric-value">${(item.consistency_score || 0).toFixed(2)}</span>
-                            </div>
-                        </div>
+                    <div style="margin-bottom: 15px;">
+                        <div class="platform-header">${title}</div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Value</th>
+                                    <th>Range</th>
+                                    <th>Sample</th>
+                                    <th>Views Lift</th>
+                                    <th>Likes Lift</th>
+                                    <th>Top 30%</th>
+                                    <th>Consistency</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${items.map(item => {
+                                    const viewsLiftClass = item.lift_views > 1.0 ? 'positive' : 'negative';
+                                    const likesLiftClass = item.lift_likes > 1.0 ? 'positive' : 'negative';
+                                    const bucketRange = item.bucket_range ? escapeHtml(item.bucket_range) : '—';
+                                    
+                                    return `
+                                        <tr>
+                                            <td><strong>${escapeHtml(item.feature)}</strong></td>
+                                            <td>${escapeHtml(item.value)}</td>
+                                            <td style="color: #6c757d; font-size: 11px;">${bucketRange}</td>
+                                            <td>${item.sample_size}</td>
+                                            <td><span class="lift-value ${viewsLiftClass}">${item.lift_views.toFixed(2)}x</span></td>
+                                            <td><span class="lift-value ${likesLiftClass}">${item.lift_likes.toFixed(2)}x</span></td>
+                                            <td>${item.appearances_in_top_30_percent || 0}</td>
+                                            <td>${(item.consistency_score || 0).toFixed(2)}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
                     </div>
                 `;
             }
 
             // Build HTML with grouped sections
             let html = '';
-
-            // Instagram-specific section
-            if (instagramResults.length > 0) {
-                html += `
-                    <div style="margin-bottom: 30px;">
-                        <h3 style="margin-bottom: 15px; color: #333; font-size: 20px; display: flex; align-items: center; gap: 8px;">
-                            📷 Instagram-Specific
-                        </h3>
-                        ${instagramResults.map(renderCard).join('')}
-                    </div>
-                `;
-            }
-
-            // TikTok-specific section
-            if (tiktokResults.length > 0) {
-                html += `
-                    <div style="margin-bottom: 30px;">
-                        <h3 style="margin-bottom: 15px; color: #333; font-size: 20px; display: flex; align-items: center; gap: 8px;">
-                            🎵 TikTok-Specific
-                        </h3>
-                        ${tiktokResults.map(renderCard).join('')}
-                    </div>
-                `;
-            }
-
-            // General information section
-            if (generalResults.length > 0) {
-                html += `
-                    <div style="margin-bottom: 30px;">
-                        <h3 style="margin-bottom: 15px; color: #333; font-size: 20px; display: flex; align-items: center; gap: 8px;">
-                            📊 General Information
-                        </h3>
-                        ${generalResults.map(renderCard).join('')}
-                    </div>
-                `;
-            }
+            html += renderTableSection(instagramResults, '📷 Instagram-Specific');
+            html += renderTableSection(tiktokResults, '🎵 TikTok-Specific');
+            html += renderTableSection(generalResults, '📊 General Information');
 
             // If all sections are empty, show empty state
             if (html === '') {
@@ -683,16 +686,16 @@
                                                 ${video.performance_rank.toFixed(2)}
                                             </span>
                                             ${video.ranking_breakdown ? `
-                                                <button class="ranking-details-btn" onclick="toggleRankingDetails('${video.s3Key}')" style="margin-left: 8px; padding: 2px 8px; font-size: 11px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">ℹ️</button>
-                                                <div id="ranking-details-${video.s3Key}" class="ranking-details-dropdown" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 5px; background: white; border: 1px solid #ccc; border-radius: 5px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1000; min-width: 250px;">
-                                                    <h4 style="margin: 0 0 10px 0; font-size: 14px;">Ranking Breakdown</h4>
-                                                    <div style="font-size: 12px; line-height: 1.6;">
+                                                <button class="ranking-details-btn" onclick="toggleRankingDetails('${video.s3Key}')" style="margin-left: 6px; padding: 2px 6px; font-size: 10px; background: #e9ecef; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; color: #495057;">ℹ️</button>
+                                                <div id="ranking-details-${video.s3Key}" class="ranking-details-dropdown" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 1000; min-width: 220px; font-size: 12px;">
+                                                    <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600;">Ranking Breakdown</h4>
+                                                    <div style="font-size: 11px; line-height: 1.5;">
                                                         <div><strong>Views Rank:</strong> ${video.ranking_breakdown.views_rank} (${(video.ranking_breakdown.views || 0).toLocaleString()} views)</div>
                                                         <div><strong>Likes Rank:</strong> ${video.ranking_breakdown.likes_rank} (${(video.ranking_breakdown.likes || 0).toLocaleString()} likes)</div>
                                                         <div><strong>Engagement Rank:</strong> ${video.ranking_breakdown.engagement_rank} (${(video.ranking_breakdown.engagement_proxy || 0).toFixed(3)} ratio)</div>
-                                                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                                                        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #e9ecef;">
                                                             <strong>Composite Rank:</strong> ${video.performance_rank.toFixed(2)}<br>
-                                                            <small style="color: #666;">Average of the three ranks above</small>
+                                                            <small style="color: #6c757d; font-size: 10px;">Average of the three ranks above</small>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -738,33 +741,37 @@
                 return;
             }
 
-            container.innerHTML = ranks.slice(0, 20).map(item => {
-                const cardClass = item.vs_median_rank > 0 ? 'positive' : item.vs_median_rank < 0 ? 'negative' : '';
-                
-                return `
-                    <div class="signal-card ${cardClass}">
-                        <div class="signal-header">
-                            <div>
-                                <span class="signal-feature">${escapeHtml(item.feature)}</span>
-                                <span class="signal-value">: ${escapeHtml(item.value)}</span>
-                            </div>
-                            <span style="font-size: 12px; color: #666;">n=${item.sample_size}</span>
-                        </div>
-                        <div class="signal-metrics">
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Avg Rank</span>
-                                <span class="signal-metric-value">${item.avg_rank.toFixed(2)}</span>
-                            </div>
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">vs Median</span>
-                                <span class="signal-metric-value ${item.vs_median_rank > 0 ? 'positive' : item.vs_median_rank < 0 ? 'negative' : ''}">
-                                    ${item.vs_median_rank > 0 ? '+' : ''}${item.vs_median_rank.toFixed(2)}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            const tableHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>Value</th>
+                            <th>Sample Size</th>
+                            <th>Avg Rank</th>
+                            <th>vs Median</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${ranks.slice(0, 30).map(item => {
+                            const vsMedianClass = item.vs_median_rank > 0 ? 'positive' : item.vs_median_rank < 0 ? 'negative' : 'neutral';
+                            const vsMedianSign = item.vs_median_rank > 0 ? '+' : '';
+                            
+                            return `
+                                <tr>
+                                    <td><strong>${escapeHtml(item.feature)}</strong></td>
+                                    <td>${escapeHtml(item.value)}</td>
+                                    <td>${item.sample_size}</td>
+                                    <td>${item.avg_rank.toFixed(2)}</td>
+                                    <td><span class="metric-badge ${vsMedianClass}">${vsMedianSign}${item.vs_median_rank.toFixed(2)}</span></td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
         }
 
         function displayDistributionSummary(distributions) {
@@ -775,29 +782,34 @@
                 return;
             }
 
-            container.innerHTML = distributions.map(item => {
-                return `
-                    <div class="signal-card">
-                        <div class="signal-header">
-                            <div>
-                                <span class="signal-feature">${escapeHtml(item.feature)}</span>
-                                <span class="signal-value">: ${escapeHtml(item.value)}</span>
-                            </div>
-                            <span style="font-size: 12px; color: #666;">n=${item.count}</span>
-                        </div>
-                        <div class="signal-metrics">
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Median Views (Relative)</span>
-                                <span class="signal-metric-value">${item.median_views_relative.toFixed(2)}</span>
-                            </div>
-                            <div class="signal-metric">
-                                <span class="signal-metric-label">Median Engagement</span>
-                                <span class="signal-metric-value">${item.median_engagement_proxy.toFixed(3)}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            const tableHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>Value</th>
+                            <th>Count</th>
+                            <th>Median Views (Relative)</th>
+                            <th>Median Engagement</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${distributions.map(item => {
+                            return `
+                                <tr>
+                                    <td><strong>${escapeHtml(item.feature)}</strong></td>
+                                    <td>${escapeHtml(item.value)}</td>
+                                    <td>${item.count}</td>
+                                    <td>${item.median_views_relative.toFixed(2)}</td>
+                                    <td>${item.median_engagement_proxy.toFixed(3)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
         }
 
         function toggleSection(header) {

@@ -109,6 +109,8 @@ function createVideoCard(video) {
                     ${video.duration ? `<div class="video-meta-item"><strong>Duration:</strong> ${formatDuration(video.duration)}</div>` : ''}
                     ${video.bpm ? `<div class="video-meta-item"><strong>BPM:</strong> ${video.bpm}</div>` : ''}
                     ${video.shockValue !== null ? `<div class="video-meta-item"><strong>Shock Value:</strong> <span style="font-weight: bold; color: ${getShockValueColor(video.shockValue)};">${video.shockValue}/100</span></div>` : ''}
+                    ${video.successScore !== null && video.successScore !== undefined ? `<div class="video-meta-item"><strong>Video Success Score:</strong> <span style="font-weight: bold; color: ${getSuccessScoreColor(video.successScore)};">${video.successScore}/100</span></div>` : ''}
+                    ${video.successRank !== null && video.successRank !== undefined ? `<div class="video-meta-item"><strong>Video Rank:</strong> <span style="font-weight: bold; color: ${getSuccessRankColor(video.successRank)};">#${video.successRank}</span></div>` : ''}
                     
                     <!-- Social Media Metrics Section -->
                     <div class="social-metrics-section" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
@@ -284,6 +286,18 @@ function getShockValueColor(score) {
     if (score >= 70) return '#dc3545'; // Red - high shock
     if (score >= 40) return '#ffc107'; // Yellow - medium shock
     return '#28a745'; // Green - low shock
+}
+
+function getSuccessScoreColor(score) {
+    if (score >= 70) return '#28a745'; // Green - high success
+    if (score >= 40) return '#ffc107'; // Yellow - medium success
+    return '#dc3545'; // Red - low success
+}
+
+function getSuccessRankColor(rank) {
+    if (rank <= 3) return '#28a745'; // Green - top 3
+    if (rank <= 6) return '#ffc107'; // Yellow - top 6
+    return '#6c757d'; // Gray - lower ranks
 }
 
 function formatDate(dateString) {

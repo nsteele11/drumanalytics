@@ -339,7 +339,7 @@ app.get("/api/videos", async (req, res) => {
     }
 
     // Fetch metadata for each video
-    const videos = [];
+    const allVideosData = []; // Store all video data first to calculate medians
     
     for (const obj of listResponse.Contents) {
       // Skip if it's not a JSON file
@@ -435,12 +435,101 @@ app.get("/api/videos", async (req, res) => {
           shockValue: metadata.analysis?.shockValue || null,
         };
 
-        videos.push(videoInfo);
+        allVideosData.push(videoInfo);
       } catch (err) {
         console.error(`Error processing metadata for ${obj.Key}:`, err);
         // Continue with next video
       }
     }
+
+    // Calculate success scores and ranks for all videos
+    // First, calculate medians for normalization
+    const igViewsValues = allVideosData
+      .filter(v => v.igViews !== null && v.igViews !== undefined && v.igViews > 0)
+      .map(v => v.igViews);
+    const igLikesValues = allVideosData
+      .filter(v => v.igLikes !== null && v.igLikes !== undefined && v.igLikes > 0)
+      .map(v => v.igLikes);
+    const tiktokViewsValues = allVideosData
+      .filter(v => v.tiktokViews !== null && v.tiktokViews !== undefined && v.tiktokViews > 0)
+      .map(v => v.tiktokViews);
+    const tiktokLikesValues = allVideosData
+      .filter(v => v.tiktokLikes !== null && v.tiktokLikes !== undefined && v.tiktokLikes > 0)
+      .map(v => v.tiktokLikes);
+
+    const calculateMedian = (values) => {
+      if (values.length === 0) return 0;
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid];
+    };
+
+    const igViewsMedian = calculateMedian(igViewsValues);
+    const igLikesMedian = calculateMedian(igLikesValues);
+    const tiktokViewsMedian = calculateMedian(tiktokViewsValues);
+    const tiktokLikesMedian = calculateMedian(tiktokLikesValues);
+
+    // Calculate success score for each video
+    allVideosData.forEach(video => {
+      let successScore = 0;
+      let hasMetrics = false;
+
+      // IG metrics contribution (50% weight)
+      if (video.igViews !== null && video.igViews !== undefined && video.igViews > 0) {
+        hasMetrics = true;
+        const viewsScore = igViewsMedian > 0 ? (video.igViews / igViewsMedian) * 30 : 0;
+        const likesScore = video.igLikes !== null && video.igLikes !== undefined && video.igLikes > 0 && igLikesMedian > 0
+          ? (video.igLikes / igLikesMedian) * 20
+          : 0;
+        successScore += viewsScore + likesScore;
+      }
+
+      // TikTok metrics contribution (50% weight)
+      if (video.tiktokViews !== null && video.tiktokViews !== undefined && video.tiktokViews > 0) {
+        hasMetrics = true;
+        const viewsScore = tiktokViewsMedian > 0 ? (video.tiktokViews / tiktokViewsMedian) * 30 : 0;
+        const likesScore = video.tiktokLikes !== null && video.tiktokLikes !== undefined && video.tiktokLikes > 0 && tiktokLikesMedian > 0
+          ? (video.tiktokLikes / tiktokLikesMedian) * 20
+          : 0;
+        successScore += viewsScore + likesScore;
+      }
+
+      // If video has metrics on both platforms, normalize to 0-100 scale
+      // If only one platform, scale appropriately
+      const hasBothPlatforms = (video.igViews !== null && video.igViews > 0) && 
+                                (video.tiktokViews !== null && video.tiktokViews > 0);
+      
+      if (hasBothPlatforms) {
+        // Both platforms: max score is 100 (30+20+30+20)
+        video.successScore = Math.round(successScore);
+      } else if (hasMetrics) {
+        // Single platform: max score is 50, scale to 100
+        video.successScore = Math.round(successScore * 2);
+      } else {
+        video.successScore = null;
+      }
+    });
+
+    // Calculate ranks based on success score
+    const videosWithScores = allVideosData.filter(v => v.successScore !== null && v.successScore !== undefined);
+    videosWithScores.sort((a, b) => b.successScore - a.successScore);
+    
+    // Assign ranks (lower rank number = better, rank 1 is best)
+    videosWithScores.forEach((video, index) => {
+      video.successRank = index + 1;
+    });
+
+    // Set rank to null for videos without scores
+    allVideosData.forEach(video => {
+      if (video.successScore === null || video.successScore === undefined) {
+        video.successRank = null;
+      }
+    });
+
+    // Use allVideosData as videos (they now have success scores and ranks)
+    const videos = allVideosData;
 
     // Sort by posted date (newest first), fallback to upload timestamp if no posted date
     videos.sort((a, b) => {
@@ -589,13 +678,71 @@ app.put("/api/videos/:s3Key/metrics", async (req, res) => {
       return res.status(404).json({ error: "Video metadata not found" });
     }
 
+    // Capture previous values for history tracking
+    const previousMetrics = {
+      igHashtags: metadata.igHashtags || null,
+      tiktokHashtags: metadata.tiktokHashtags || null,
+      igViews: metadata.igViews !== undefined && metadata.igViews !== null ? Number(metadata.igViews) : null,
+      igLikes: metadata.igLikes !== undefined && metadata.igLikes !== null ? Number(metadata.igLikes) : null,
+      tiktokViews: metadata.tiktokViews !== undefined && metadata.tiktokViews !== null ? Number(metadata.tiktokViews) : null,
+      tiktokLikes: metadata.tiktokLikes !== undefined && metadata.tiktokLikes !== null ? Number(metadata.tiktokLikes) : null,
+      postedDate: metadata.postedDate || null
+    };
+
+    // Get new values
+    const newIgViews = igViews !== undefined && igViews !== null ? Number(igViews) : null;
+    const newIgLikes = igLikes !== undefined && igLikes !== null ? Number(igLikes) : null;
+    const newTiktokViews = tiktokViews !== undefined && tiktokViews !== null ? Number(tiktokViews) : null;
+    const newTiktokLikes = tiktokLikes !== undefined && tiktokLikes !== null ? Number(tiktokLikes) : null;
+
+    // Detect changes
+    const changes = {};
+    if (previousMetrics.igViews !== newIgViews) changes.igViews = { from: previousMetrics.igViews, to: newIgViews };
+    if (previousMetrics.igLikes !== newIgLikes) changes.igLikes = { from: previousMetrics.igLikes, to: newIgLikes };
+    if (previousMetrics.tiktokViews !== newTiktokViews) changes.tiktokViews = { from: previousMetrics.tiktokViews, to: newTiktokViews };
+    if (previousMetrics.tiktokLikes !== newTiktokLikes) changes.tiktokLikes = { from: previousMetrics.tiktokLikes, to: newTiktokLikes };
+    if (previousMetrics.igHashtags !== (igHashtags || null)) changes.igHashtags = { from: previousMetrics.igHashtags, to: (igHashtags || null) };
+    if (previousMetrics.tiktokHashtags !== (tiktokHashtags || null)) changes.tiktokHashtags = { from: previousMetrics.tiktokHashtags, to: (tiktokHashtags || null) };
+    if (previousMetrics.postedDate !== (postedDate || null)) changes.postedDate = { from: previousMetrics.postedDate, to: (postedDate || null) };
+
+    // Initialize metricsHistory if it doesn't exist
+    if (!metadata.metricsHistory) {
+      metadata.metricsHistory = [];
+    }
+
+    // Only create history entry if there are actual changes
+    if (Object.keys(changes).length > 0) {
+      const historyEntry = {
+        timestamp: new Date().toISOString(),
+        previous: previousMetrics,
+        current: {
+          igHashtags: igHashtags || null,
+          tiktokHashtags: tiktokHashtags || null,
+          igViews: newIgViews,
+          igLikes: newIgLikes,
+          tiktokViews: newTiktokViews,
+          tiktokLikes: newTiktokLikes,
+          postedDate: postedDate || null
+        },
+        changes: changes
+      };
+
+      // Add to history (most recent first)
+      metadata.metricsHistory.unshift(historyEntry);
+
+      // Limit history to last 50 entries to prevent unbounded growth
+      if (metadata.metricsHistory.length > 50) {
+        metadata.metricsHistory = metadata.metricsHistory.slice(0, 50);
+      }
+    }
+
     // Update the metrics
     metadata.igHashtags = igHashtags || null;
     metadata.tiktokHashtags = tiktokHashtags || null;
-    metadata.igViews = igViews !== undefined && igViews !== null ? Number(igViews) : null;
-    metadata.igLikes = igLikes !== undefined && igLikes !== null ? Number(igLikes) : null;
-    metadata.tiktokViews = tiktokViews !== undefined && tiktokViews !== null ? Number(tiktokViews) : null;
-    metadata.tiktokLikes = tiktokLikes !== undefined && tiktokLikes !== null ? Number(tiktokLikes) : null;
+    metadata.igViews = newIgViews;
+    metadata.igLikes = newIgLikes;
+    metadata.tiktokViews = newTiktokViews;
+    metadata.tiktokLikes = newTiktokLikes;
     metadata.postedDate = postedDate || null;
     metadata.metricsUpdatedAt = new Date().toISOString();
 
@@ -623,11 +770,90 @@ app.put("/api/videos/:s3Key/metrics", async (req, res) => {
         tiktokLikes: metadata.tiktokLikes,
         postedDate: metadata.postedDate,
         metricsUpdatedAt: metadata.metricsUpdatedAt
-      }
+      },
+      historyEntry: Object.keys(changes).length > 0 ? {
+        timestamp: metadata.metricsHistory[0].timestamp,
+        changes: changes
+      } : null,
+      totalHistoryEntries: metadata.metricsHistory ? metadata.metricsHistory.length : 0
     });
   } catch (err) {
     console.error("Error updating video metrics:", err);
     res.status(500).json({ error: "Failed to update metrics", message: err.message });
+  }
+});
+
+// ----------------------
+// Get Video Metrics History Endpoint
+// ----------------------
+app.get("/api/videos/:s3Key/metrics-history", async (req, res) => {
+  try {
+    const { s3Key } = req.params;
+    
+    if (!s3Key) {
+      return res.status(400).json({ error: "Video key is required" });
+    }
+
+    if (!process.env.S3_BUCKET_NAME) {
+      console.error("S3_BUCKET_NAME environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    // Get the existing metadata file
+    const metadataKey = `results/${s3Key}.json`;
+    const getMetadataCommand = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: metadataKey,
+    });
+
+    let metadata;
+    try {
+      const metadataResponse = await s3.send(getMetadataCommand);
+      const metadataStream = metadataResponse.Body;
+      
+      // Convert stream to string
+      const metadataText = await new Promise((resolve, reject) => {
+        const chunks = [];
+        metadataStream.on('data', (chunk) => chunks.push(chunk));
+        metadataStream.on('end', () => {
+          try {
+            resolve(Buffer.concat(chunks).toString('utf-8'));
+          } catch (err) {
+            reject(err);
+          }
+        });
+        metadataStream.on('error', reject);
+      });
+
+      metadata = JSON.parse(metadataText);
+    } catch (err) {
+      console.error("Error fetching metadata:", err);
+      return res.status(404).json({ error: "Video metadata not found" });
+    }
+
+    // Return metrics history
+    const history = metadata.metricsHistory || [];
+    
+    res.json({
+      s3Key,
+      trackName: metadata.trackName || metadata.spotify?.track?.name || 'Unknown',
+      artistName: metadata.artistName || metadata.spotify?.artist?.name || 'Unknown',
+      currentMetrics: {
+        igHashtags: metadata.igHashtags || null,
+        tiktokHashtags: metadata.tiktokHashtags || null,
+        igViews: metadata.igViews || null,
+        igLikes: metadata.igLikes || null,
+        tiktokViews: metadata.tiktokViews || null,
+        tiktokLikes: metadata.tiktokLikes || null,
+        postedDate: metadata.postedDate || null,
+        metricsUpdatedAt: metadata.metricsUpdatedAt || null
+      },
+      history: history,
+      totalHistoryEntries: history.length
+    });
+  } catch (err) {
+    console.error("Error fetching metrics history:", err);
+    res.status(500).json({ error: "Failed to fetch metrics history", message: err.message });
   }
 });
 
