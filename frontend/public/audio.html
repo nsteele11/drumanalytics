@@ -1385,10 +1385,10 @@
                 artistName: v.artistName || 'Unknown'
             }));
             
-            // Find min/max for scaling
-            const minFollowers = Math.min(...dataPoints.map(d => d.followers));
+            // Find max for scaling (min is always 0)
+            const minFollowers = 0;
             const maxFollowers = Math.max(...dataPoints.map(d => d.followers));
-            const minViews = Math.min(...dataPoints.map(d => d.views));
+            const minViews = 0;
             const maxViews = Math.max(...dataPoints.map(d => d.views));
             
             // Chart dimensions
@@ -1401,15 +1401,15 @@
             const plotWidth = chartWidth - marginLeft - marginRight;
             const plotHeight = chartHeight - marginTop - marginBottom;
             
-            // Scale functions
+            // Scale functions (min is always 0)
             const scaleX = (followers) => {
-                if (maxFollowers === minFollowers) return plotWidth / 2;
-                return ((followers - minFollowers) / (maxFollowers - minFollowers)) * plotWidth;
+                if (maxFollowers === 0) return plotWidth / 2;
+                return (followers / maxFollowers) * plotWidth;
             };
             
             const scaleY = (views) => {
-                if (maxViews === minViews) return plotHeight / 2;
-                return plotHeight - ((views - minViews) / (maxViews - minViews)) * plotHeight;
+                if (maxViews === 0) return plotHeight / 2;
+                return plotHeight - (views / maxViews) * plotHeight;
             };
             
             // Get current filter value for title
@@ -1442,7 +1442,7 @@
                         <!-- X-axis ticks and labels -->
                         ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
                             const x = marginLeft + (ratio * plotWidth);
-                            const value = Math.round(minFollowers + (maxFollowers - minFollowers) * ratio);
+                            const value = Math.round(maxFollowers * ratio);
                             return `
                                 <line x1="${x}" y1="${marginTop + plotHeight}" x2="${x}" y2="${marginTop + plotHeight + 5}" 
                                       style="stroke: #666; stroke-width: 1;" />
@@ -1454,7 +1454,7 @@
                         <!-- Y-axis ticks and labels -->
                         ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
                             const y = marginTop + plotHeight - (ratio * plotHeight);
-                            const value = Math.round(minViews + (maxViews - minViews) * ratio);
+                            const value = Math.round(maxViews * ratio);
                             return `
                                 <line x1="${marginLeft - 5}" y1="${y}" x2="${marginLeft}" y2="${y}" 
                                       style="stroke: #666; stroke-width: 1;" />
@@ -1524,25 +1524,35 @@
                 return;
             }
             
-            // Get views (IG only, Solo Mix only)
+            // Get data points with both followers and popularity
             const dataPoints = validVideos.map(v => ({
                 followers: v.artistFollowers,
+                popularity: v.popularity,
                 views: v.igViews
             }));
             
             // Create histogram bins for artist followers
             // Use predefined bins matching the artist_size buckets
-            const bins = [
-                { label: '< 100k', min: 0, max: 100000, data: [] },
-                { label: '100k-1M', min: 100000, max: 1000000, data: [] },
-                { label: '1M-3M', min: 1000000, max: 3000000, data: [] },
-                { label: '3M-10M', min: 3000000, max: 10000000, data: [] },
-                { label: '> 10M', min: 10000000, max: Infinity, data: [] }
+            const followerBins = [
+                { label: '< 100k', min: 0, max: 100000, data: [], type: 'followers' },
+                { label: '100k-1M', min: 100000, max: 1000000, data: [], type: 'followers' },
+                { label: '1M-3M', min: 1000000, max: 3000000, data: [], type: 'followers' },
+                { label: '3M-10M', min: 3000000, max: 10000000, data: [], type: 'followers' },
+                { label: '> 10M', min: 10000000, max: Infinity, data: [], type: 'followers' }
             ];
             
-            // Sort data into bins
+            // Create histogram bins for track popularity
+            // Use predefined bins matching the track_popularity buckets
+            const popularityBins = [
+                { label: '<50', min: 0, max: 50, data: [], type: 'popularity' },
+                { label: '51-70', min: 51, max: 70, data: [], type: 'popularity' },
+                { label: '71-84', min: 71, max: 84, data: [], type: 'popularity' },
+                { label: '>84', min: 85, max: 100, data: [], type: 'popularity' }
+            ];
+            
+            // Sort data into follower bins
             dataPoints.forEach(point => {
-                for (const bin of bins) {
+                for (const bin of followerBins) {
                     if (point.followers >= bin.min && point.followers < bin.max) {
                         bin.data.push(point);
                         break;
@@ -1550,8 +1560,20 @@
                 }
             });
             
+            // Sort data into popularity bins
+            dataPoints.forEach(point => {
+                if (point.popularity !== null && point.popularity !== undefined) {
+                    for (const bin of popularityBins) {
+                        if (point.popularity >= bin.min && point.popularity <= bin.max) {
+                            bin.data.push(point);
+                            break;
+                        }
+                    }
+                }
+            });
+            
             // Calculate average views per bin
-            bins.forEach(bin => {
+            followerBins.forEach(bin => {
                 if (bin.data.length > 0) {
                     bin.avgViews = bin.data.reduce((sum, d) => sum + d.views, 0) / bin.data.length;
                     bin.count = bin.data.length;
@@ -1561,14 +1583,28 @@
                 }
             });
             
+            popularityBins.forEach(bin => {
+                if (bin.data.length > 0) {
+                    bin.avgViews = bin.data.reduce((sum, d) => sum + d.views, 0) / bin.data.length;
+                    bin.count = bin.data.length;
+                } else {
+                    bin.avgViews = 0;
+                    bin.count = 0;
+                }
+            });
+            
+            // Combine both bin types for display
+            const allBins = [...followerBins.filter(b => b.count > 0), ...popularityBins.filter(b => b.count > 0)];
+            
             // Find max for scaling
-            const maxAvgViews = Math.max(...bins.map(b => b.avgViews), 1);
+            const maxAvgViews = Math.max(...allBins.map(b => b.avgViews), 1);
             
             // Create histogram
-            const chartWidth = 800;
+            const chartWidth = 1000;
             const chartHeight = 400;
-            const barWidth = 120;
-            const barSpacing = 20;
+            const barWidth = 110;
+            const barSpacing = 15;
+            const groupSpacing = 40; // Space between follower and popularity groups
             const maxBarHeight = 300;
             const startX = 100;
             const startY = 350;
@@ -1579,8 +1615,14 @@
             
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Average Instagram Views${filterText}</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Average Instagram Views by Artist Followers & Song Popularity${filterText}</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
+                        <!-- Legend -->
+                        <rect x="${chartWidth - 200}" y="10" width="15" height="15" style="fill: #007bff; stroke: #0056b3; stroke-width: 1;" />
+                        <text x="${chartWidth - 180}" y="21" style="font-size: 12px; fill: #333;">Artist Followers</text>
+                        <rect x="${chartWidth - 200}" y="30" width="15" height="15" style="fill: #28a745; stroke: #1e7e34; stroke-width: 1;" />
+                        <text x="${chartWidth - 180}" y="41" style="font-size: 12px; fill: #333;">Song Popularity</text>
+                        
                         <!-- Y-axis label -->
                         <text x="20" y="${startY / 2}" transform="rotate(-90, 20, ${startY / 2})" 
                               style="font-size: 12px; fill: #666;">Average Instagram Views</text>
@@ -1606,18 +1648,49 @@
                         }).join('')}
             `;
             
-            // Draw bars
-            bins.forEach((bin, index) => {
+            // Draw follower bars
+            followerBins.forEach((bin, index) => {
                 if (bin.count === 0) return;
                 
                 const x = startX + (index * (barWidth + barSpacing)) + barSpacing;
                 const barHeight = (bin.avgViews / maxAvgViews) * maxBarHeight;
                 const y = startY - barHeight;
                 
-                // Bar
+                // Bar (blue for followers)
                 svg += `
                     <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" 
                           style="fill: #007bff; stroke: #0056b3; stroke-width: 1;" />
+                    <text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" 
+                          style="font-size: 11px; font-weight: 600; fill: #333;">
+                        ${Math.round(bin.avgViews).toLocaleString()}
+                    </text>
+                    <text x="${x + barWidth / 2}" y="${startY + 20}" text-anchor="middle" 
+                          style="font-size: 11px; fill: #666;">
+                        ${bin.label}
+                    </text>
+                    <text x="${x + barWidth / 2}" y="${startY + 35}" text-anchor="middle" 
+                          style="font-size: 10px; fill: #999;">
+                        (n=${bin.count})
+                    </text>
+                `;
+            });
+            
+            // Calculate starting position for popularity bars (after follower bars + spacing)
+            const followerBarsCount = followerBins.filter(b => b.count > 0).length;
+            const popularityStartX = startX + (followerBarsCount * (barWidth + barSpacing)) + barSpacing + groupSpacing;
+            
+            // Draw popularity bars
+            popularityBins.forEach((bin, index) => {
+                if (bin.count === 0) return;
+                
+                const x = popularityStartX + (index * (barWidth + barSpacing)) + barSpacing;
+                const barHeight = (bin.avgViews / maxAvgViews) * maxBarHeight;
+                const y = startY - barHeight;
+                
+                // Bar (green for popularity)
+                svg += `
+                    <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" 
+                          style="fill: #28a745; stroke: #1e7e34; stroke-width: 1;" />
                     <text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" 
                           style="font-size: 11px; font-weight: 600; fill: #333;">
                         ${Math.round(bin.avgViews).toLocaleString()}
@@ -1664,10 +1737,10 @@
                 artistName: v.artistName || 'Unknown'
             }));
             
-            // Find min/max for scaling
-            const minFollowers = Math.min(...dataPoints.map(d => d.followers));
+            // Find max for scaling (min is always 0)
+            const minFollowers = 0;
             const maxFollowers = Math.max(...dataPoints.map(d => d.followers));
-            const minViews = Math.min(...dataPoints.map(d => d.views));
+            const minViews = 0;
             const maxViews = Math.max(...dataPoints.map(d => d.views));
             
             // Chart dimensions
@@ -1680,15 +1753,15 @@
             const plotWidth = chartWidth - marginLeft - marginRight;
             const plotHeight = chartHeight - marginTop - marginBottom;
             
-            // Scale functions
+            // Scale functions (min is always 0)
             const scaleX = (followers) => {
-                if (maxFollowers === minFollowers) return plotWidth / 2;
-                return ((followers - minFollowers) / (maxFollowers - minFollowers)) * plotWidth;
+                if (maxFollowers === 0) return plotWidth / 2;
+                return (followers / maxFollowers) * plotWidth;
             };
             
             const scaleY = (views) => {
-                if (maxViews === minViews) return plotHeight / 2;
-                return plotHeight - ((views - minViews) / (maxViews - minViews)) * plotHeight;
+                if (maxViews === 0) return plotHeight / 2;
+                return plotHeight - (views / maxViews) * plotHeight;
             };
             
             // Get current filter value for title
@@ -1721,7 +1794,7 @@
                         <!-- X-axis ticks and labels -->
                         ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
                             const x = marginLeft + (ratio * plotWidth);
-                            const value = Math.round(minFollowers + (maxFollowers - minFollowers) * ratio);
+                            const value = Math.round(maxFollowers * ratio);
                             return `
                                 <line x1="${x}" y1="${marginTop + plotHeight}" x2="${x}" y2="${marginTop + plotHeight + 5}" 
                                       style="stroke: #666; stroke-width: 1;" />
@@ -1733,7 +1806,7 @@
                         <!-- Y-axis ticks and labels -->
                         ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
                             const y = marginTop + plotHeight - (ratio * plotHeight);
-                            const value = Math.round(minViews + (maxViews - minViews) * ratio);
+                            const value = Math.round(maxViews * ratio);
                             return `
                                 <line x1="${marginLeft - 5}" y1="${y}" x2="${marginLeft}" y2="${y}" 
                                       style="stroke: #666; stroke-width: 1;" />
