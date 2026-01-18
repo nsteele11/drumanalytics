@@ -633,13 +633,19 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     const dropdown = document.getElementById(`shock-dropdown-${id}`);
     if (!dropdown) return;
     
-    // Get the trigger element to calculate position
-    const trigger = dropdown.previousElementSibling;
-    if (trigger) {
-        const rect = trigger.getBoundingClientRect();
+    // Find the video card container (closest parent with class 'video-card')
+    const trigger = dropdown.closest('.hoverable-score-container');
+    const videoCard = trigger ? trigger.closest('.video-card') : null;
+    
+    if (videoCard && trigger) {
+        const cardRect = videoCard.getBoundingClientRect();
+        const triggerRect = trigger.getBoundingClientRect();
+        
+        // Position dropdown left-aligned to video card, below the trigger
         dropdown.style.position = 'fixed';
-        dropdown.style.left = rect.left + 'px';
-        dropdown.style.top = (rect.bottom + 4) + 'px';
+        dropdown.style.left = cardRect.left + 'px';
+        dropdown.style.top = (triggerRect.bottom + 4) + 'px';
+        dropdown.style.zIndex = '1000000';
     }
     
     // Close all other score dropdowns
@@ -712,13 +718,19 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     const dropdown = document.getElementById(`success-dropdown-${id}`);
     if (!dropdown) return;
     
-    // Get the trigger element to calculate position
-    const trigger = dropdown.previousElementSibling;
-    if (trigger) {
-        const rect = trigger.getBoundingClientRect();
+    // Find the video card container (closest parent with class 'video-card')
+    const trigger = dropdown.closest('.hoverable-score-container');
+    const videoCard = trigger ? trigger.closest('.video-card') : null;
+    
+    if (videoCard && trigger) {
+        const cardRect = videoCard.getBoundingClientRect();
+        const triggerRect = trigger.getBoundingClientRect();
+        
+        // Position dropdown left-aligned to video card, below the trigger
         dropdown.style.position = 'fixed';
-        dropdown.style.left = rect.left + 'px';
-        dropdown.style.top = (rect.bottom + 4) + 'px';
+        dropdown.style.left = cardRect.left + 'px';
+        dropdown.style.top = (triggerRect.bottom + 4) + 'px';
+        dropdown.style.zIndex = '1000000';
     }
     
     // Close all other score dropdowns
@@ -845,7 +857,7 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     `;
     
     dropdown.style.display = 'block';
-    dropdown.style.zIndex = '100000';
+    dropdown.style.zIndex = '1000000';
 }
 
 function hideSuccessScoreDropdown(id) {
@@ -981,7 +993,7 @@ loadVideos();
 }
 
 .score-dropdown {
-    z-index: 100000 !important;
+    z-index: 1000000 !important;
     position: fixed !important;
 }
 

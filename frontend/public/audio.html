@@ -615,8 +615,28 @@
                             Visual analysis of video performance metrics.
                         </p>
                         <div id="chartingContent">
+                            <div style="margin-bottom: 20px;">
+                                <label for="scatterFilterIG" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
+                                <select id="scatterFilterIG" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                    <option value="All Videos">All Videos</option>
+                                </select>
+                            </div>
                             <div id="artistFollowersScatter"></div>
+                            
+                            <div style="margin-top: 30px; margin-bottom: 20px;">
+                                <label for="histogramFilter" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
+                                <select id="histogramFilter" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                    <option value="All Videos">All Videos</option>
+                                </select>
+                            </div>
                             <div id="artistFollowersHistogram"></div>
+                            
+                            <div style="margin-top: 30px; margin-bottom: 20px;">
+                                <label for="scatterFilterTikTok" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
+                                <select id="scatterFilterTikTok" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                    <option value="All Videos">All Videos</option>
+                                </select>
+                            </div>
                             <div id="artistFollowersScatterTikTok"></div>
                         </div>
                     </div>
@@ -1261,6 +1281,8 @@
         });
 
         // Load charting data
+        let allChartingVideos = [];
+        
         async function loadChartingData() {
             try {
                 // Fetch videos data for charting
@@ -1269,15 +1291,13 @@
                     throw new Error('Failed to fetch videos data');
                 }
                 const videos = await response.json();
+                allChartingVideos = videos;
                 
-                // Display scatter chart (Instagram)
-                displayArtistFollowersScatter(videos);
+                // Populate video type filters
+                populateVideoTypeFilters(videos);
                 
-                // Display histogram (Instagram, Solo Mix only)
-                displayArtistFollowersHistogram(videos);
-                
-                // Display scatter chart (TikTok)
-                displayArtistFollowersScatterTikTok(videos);
+                // Display charts with default filter (Solo Mix)
+                updateCharts();
             } catch (err) {
                 console.error('Error loading charting data:', err);
                 const scatterContainer = document.getElementById('artistFollowersScatter');
@@ -1295,6 +1315,53 @@
             }
         }
 
+        function populateVideoTypeFilters(videos) {
+            // Get unique video types
+            const videoTypes = new Set();
+            videos.forEach(v => {
+                if (v.videoType) {
+                    videoTypes.add(v.videoType);
+                }
+            });
+            
+            const sortedTypes = Array.from(videoTypes).sort();
+            const options = '<option value="All Videos">All Videos</option>' + 
+                sortedTypes.map(type => `<option value="${escapeHtml(type)}" ${type === 'Solo Mix' ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('');
+            
+            // Populate all three filters
+            document.getElementById('scatterFilterIG').innerHTML = options;
+            document.getElementById('histogramFilter').innerHTML = options;
+            document.getElementById('scatterFilterTikTok').innerHTML = options;
+            
+            // Add event listeners
+            document.getElementById('scatterFilterIG').addEventListener('change', updateCharts);
+            document.getElementById('histogramFilter').addEventListener('change', updateCharts);
+            document.getElementById('scatterFilterTikTok').addEventListener('change', updateCharts);
+        }
+        
+        function filterVideosByType(videos, videoType) {
+            if (videoType === 'All Videos') {
+                return videos;
+            }
+            return videos.filter(v => v.videoType === videoType);
+        }
+        
+        function updateCharts() {
+            const scatterFilterIG = document.getElementById('scatterFilterIG')?.value || 'Solo Mix';
+            const histogramFilter = document.getElementById('histogramFilter')?.value || 'Solo Mix';
+            const scatterFilterTikTok = document.getElementById('scatterFilterTikTok')?.value || 'Solo Mix';
+            
+            // Filter videos for each chart
+            const scatterVideosIG = filterVideosByType(allChartingVideos, scatterFilterIG);
+            const histogramVideos = filterVideosByType(allChartingVideos, histogramFilter);
+            const scatterVideosTikTok = filterVideosByType(allChartingVideos, scatterFilterTikTok);
+            
+            // Display charts
+            displayArtistFollowersScatter(scatterVideosIG);
+            displayArtistFollowersHistogram(histogramVideos);
+            displayArtistFollowersScatterTikTok(scatterVideosTikTok);
+        }
+        
         function displayArtistFollowersScatter(videos) {
             const container = document.getElementById('artistFollowersScatter');
             
@@ -1345,10 +1412,14 @@
                 return plotHeight - ((views - minViews) / (maxViews - minViews)) * plotHeight;
             };
             
+            // Get current filter value for title
+            const filterValue = document.getElementById('scatterFilterIG')?.value || 'Solo Mix';
+            const filterText = filterValue === 'All Videos' ? '' : ` (${filterValue})`;
+            
             // Create scatter plot
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Instagram Views (Scatter Plot)</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Instagram Views${filterText} (Scatter Plot)</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
                         <!-- Y-axis label -->
                         <text x="${marginLeft / 2}" y="${marginTop + plotHeight / 2}" transform="rotate(-90, ${marginLeft / 2}, ${marginTop + plotHeight / 2})" 
@@ -1440,16 +1511,16 @@
         function displayArtistFollowersHistogram(videos) {
             const container = document.getElementById('artistFollowersHistogram');
             
-            // Filter videos: Solo Mix type, with artistFollowers and IG views data
+            // Filter videos with artistFollowers and IG views data (video type already filtered by updateCharts)
             const validVideos = videos.filter(v => 
-                v.videoType === 'Solo Mix' &&
                 v.artistFollowers !== null && 
                 v.artistFollowers !== undefined && 
                 v.igViews > 0
             );
             
             if (validVideos.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No Solo Mix videos with Instagram views data available for histogram.</p></div>';
+                const filterValue = document.getElementById('histogramFilter')?.value || 'Solo Mix';
+                container.innerHTML = `<div class="empty-state"><p>No ${filterValue === 'All Videos' ? '' : filterValue + ' '}videos with Instagram views data available for histogram.</p></div>`;
                 return;
             }
             
@@ -1502,9 +1573,13 @@
             const startX = 100;
             const startY = 350;
             
+            // Get current filter value for title
+            const filterValue = document.getElementById('histogramFilter')?.value || 'Solo Mix';
+            const filterText = filterValue === 'All Videos' ? '' : ` (${filterValue})`;
+            
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Average Instagram Views (Solo Mix Only)</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Average Instagram Views${filterText}</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
                         <!-- Y-axis label -->
                         <text x="20" y="${startY / 2}" transform="rotate(-90, 20, ${startY / 2})" 
@@ -1616,10 +1691,14 @@
                 return plotHeight - ((views - minViews) / (maxViews - minViews)) * plotHeight;
             };
             
+            // Get current filter value for title
+            const filterValue = document.getElementById('scatterFilterTikTok')?.value || 'Solo Mix';
+            const filterText = filterValue === 'All Videos' ? '' : ` (${filterValue})`;
+            
             // Create scatter plot
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs TikTok Views (Scatter Plot)</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs TikTok Views${filterText} (Scatter Plot)</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
                         <!-- Y-axis label -->
                         <text x="${marginLeft / 2}" y="${marginTop + plotHeight / 2}" transform="rotate(-90, ${marginLeft / 2}, ${marginTop + plotHeight / 2})" 
