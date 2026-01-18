@@ -345,6 +345,43 @@
             color: #0056b3;
         }
         
+        .sample-size-btn {
+            margin-left: 6px;
+            padding: 2px 6px;
+            font-size: 10px;
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            cursor: pointer;
+            color: #495057;
+            display: inline-block;
+        }
+        
+        .sample-size-btn:hover {
+            background: #dee2e6;
+        }
+        
+        .sample-size-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            background: white;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 220px;
+            font-size: 12px;
+        }
+        
+        .sample-size-container {
+            position: relative;
+            display: inline-block;
+        }
+        
         .sample-popup {
             display: none;
             position: fixed;
@@ -473,9 +510,14 @@
 
             <div id="analysisContent" style="display: none;">
                 <!-- Metadata Info -->
-                <div class="analysis-section">
-                    <h2>Analysis Overview</h2>
-                    <div id="metadataInfo" class="metadata-info"></div>
+                <div class="analysis-section collapsible-section">
+                    <div class="collapsible-header expanded" onclick="toggleSection(this)">
+                        <h2 style="margin: 0;">Analysis Overview</h2>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="collapsible-content expanded">
+                        <div id="metadataInfo" class="metadata-info"></div>
+                    </div>
                 </div>
 
                 <!-- Early Signal Summary -->
@@ -506,13 +548,32 @@
                     </div>
                 </div>
 
-                <!-- Per-Video Comparison -->
-                <div class="analysis-section">
-                    <h2>Per-Video Comparison</h2>
-                    <p class="section-description">
-                        Individual video performance with metadata overlap against top 30% performers.
-                    </p>
-                    <div id="perVideoComparison"></div>
+                <!-- IG Per-Video Comparison -->
+                <div class="analysis-section collapsible-section">
+                    <div class="collapsible-header expanded" onclick="toggleSection(this)">
+                        <h2 style="margin: 0;">IG Per-Video Comparison</h2>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="collapsible-content expanded">
+                        <p class="section-description">
+                            Individual Instagram video performance with metadata overlap against top 30% performers.
+                        </p>
+                        <div id="perVideoComparisonIG"></div>
+                    </div>
+                </div>
+
+                <!-- TikTok Per-Video Comparison -->
+                <div class="analysis-section collapsible-section">
+                    <div class="collapsible-header" onclick="toggleSection(this)">
+                        <h2 style="margin: 0;">TikTok Per-Video Comparison</h2>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="collapsible-content">
+                        <p class="section-description">
+                            Individual TikTok video performance with metadata overlap against top 30% performers.
+                        </p>
+                        <div id="perVideoComparisonTikTok"></div>
+                    </div>
                 </div>
 
                 <!-- Rank Association -->
@@ -618,7 +679,11 @@
             displayWhatSeemsWorking(data.what_seems_working);
             
             // Display per-video comparison
-            displayPerVideoComparison(data.per_video_comparison);
+            // Split into IG and TikTok sections
+            const igVideos = (data.per_video_comparison || []).filter(v => v.platform && v.platform.toLowerCase() === 'instagram');
+            const tiktokVideos = (data.per_video_comparison || []).filter(v => v.platform && v.platform.toLowerCase() === 'tiktok');
+            displayPerVideoComparisonIG(igVideos);
+            displayPerVideoComparisonTikTok(tiktokVideos);
             
             // Display rank association
             displayRankAssociation(data.rank_association);
@@ -759,23 +824,62 @@
             container.innerHTML = html;
         }
 
+        function renderSampleSizeWithDropdown(sampleSize, videos, id, feature, value) {
+            const videosList = videos && videos.length > 0
+                ? videos.map(v => `
+                    <div style="padding: 4px 0; border-bottom: 1px solid #f0f0f0;">
+                        <strong>${escapeHtml(v.trackName)}</strong> by ${escapeHtml(v.artistName)}
+                    </div>
+                `).join('')
+                : '<div style="padding: 4px 0;">No video information available</div>';
+            
+            const featureEscaped = escapeHtml(feature);
+            const valueEscaped = escapeHtml(value);
+            
+            return `
+                <div class="sample-size-container" 
+                     onmouseenter="showSampleDropdown('${id}')" 
+                     onmouseleave="hideSampleDropdown('${id}')">
+                    ${sampleSize}
+                    <button class="sample-size-btn" 
+                            style="margin-left: 6px; padding: 2px 6px; font-size: 10px; background: #e9ecef; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; color: #495057;">ℹ️</button>
+                    <div id="sample-dropdown-${id}" 
+                         class="sample-size-dropdown" 
+                         style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 1000; min-width: 220px; font-size: 12px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600;">Sample Videos</h4>
+                        <div style="font-size: 11px; line-height: 1.5; margin-bottom: 6px; color: #666;">
+                            <strong>Feature:</strong> ${featureEscaped}<br>
+                            <strong>Value:</strong> ${valueEscaped}
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e9ecef;">
+                            <strong style="color: #333;">Songs in Sample (${sampleSize}):</strong>
+                            <div style="margin-top: 6px; max-height: 200px; overflow-y: auto;">
+                                ${videosList}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         function renderSignalRow(signal, index, hideFeature = false) {
             const viewsLiftClass = signal.lift_views > 1.0 ? 'positive' : signal.lift_views < 1.0 ? 'negative' : '';
             const likesLiftClass = signal.lift_likes > 1.0 ? 'positive' : signal.lift_likes < 1.0 ? 'negative' : '';
             const bucketRange = signal.bucket_range ? escapeHtml(signal.bucket_range) : '—';
             const signalId = `signal-${signal.feature}-${signal.value}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const videosJson = JSON.stringify(signal.videos || []).replace(/"/g, '&quot;');
+            const featureEscaped = escapeHtml(signal.feature);
+            const valueEscaped = escapeHtml(signal.value);
             
-            const featureCell = hideFeature ? '' : `<td><strong>${escapeHtml(signal.feature)}</strong></td>`;
+            const featureCell = hideFeature ? '' : `<td><strong>${featureEscaped}</strong></td>`;
             
             return `
                 <tr>
                     ${featureCell}
-                    <td>${escapeHtml(signal.value)}</td>
+                    <td>${valueEscaped}</td>
                     <td style="color: #6c757d; font-size: 11px;">${bucketRange}</td>
                     <td>
-                        <span class="sample-size-link" onclick="showSamplePopup('${signalId}', ${JSON.stringify(signal.videos || []).replace(/"/g, '&quot;')}, '${escapeHtml(signal.feature)}', '${escapeHtml(signal.value)}')">
-                            ${signal.sample_size}
-                        </span>
+                        ${renderSampleSizeWithDropdown(signal.sample_size, signal.videos, signalId, signal.feature, signal.value)}
                     </td>
                     <td><span class="lift-value ${viewsLiftClass}">${signal.lift_views.toFixed(2)}x</span></td>
                     <td><span class="lift-value ${likesLiftClass}">${signal.lift_likes.toFixed(2)}x</span></td>
@@ -784,67 +888,37 @@
             `;
         }
 
-        function showSamplePopup(id, videos, feature, value) {
-            const overlay = document.getElementById('sample-popup-overlay') || createPopupElements();
-            const popup = document.getElementById('sample-popup');
-            
-            // Set popup content
-            const content = popup.querySelector('.sample-popup-content');
-            if (videos && videos.length > 0) {
-                content.innerHTML = `
-                    <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
-                        <strong>Feature:</strong> ${feature}<br>
-                        <strong>Value:</strong> ${value}
-                    </div>
-                    <div style="margin-top: 15px;">
-                        <strong style="color: #333;">Songs in Sample (${videos.length}):</strong>
-                        <div style="margin-top: 10px;">
-                            ${videos.map(v => `
-                                <div class="sample-video-item">
-                                    <strong>${escapeHtml(v.trackName)}</strong> by ${escapeHtml(v.artistName)}
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            } else {
-                content.innerHTML = '<p>No video information available for this sample.</p>';
+        let sampleDropdownTimeout = null;
+
+        function showSampleDropdown(id) {
+            // Clear any pending hide timeout
+            if (sampleDropdownTimeout) {
+                clearTimeout(sampleDropdownTimeout);
+                sampleDropdownTimeout = null;
             }
             
-            overlay.classList.add('show');
-            popup.classList.add('show');
+            const dropdown = document.getElementById(`sample-dropdown-${id}`);
+            if (dropdown) {
+                // Close all other dropdowns
+                document.querySelectorAll('.sample-size-dropdown').forEach(dd => {
+                    if (dd.id !== `sample-dropdown-${id}`) {
+                        dd.style.display = 'none';
+                    }
+                });
+                // Show this dropdown
+                dropdown.style.display = 'block';
+            }
         }
 
-        function createPopupElements() {
-            const overlay = document.createElement('div');
-            overlay.id = 'sample-popup-overlay';
-            overlay.className = 'popup-overlay';
-            overlay.onclick = closeSamplePopup;
-            
-            const popup = document.createElement('div');
-            popup.id = 'sample-popup';
-            popup.className = 'sample-popup';
-            popup.onclick = (e) => e.stopPropagation();
-            
-            popup.innerHTML = `
-                <div class="sample-popup-header">
-                    <h3>Sample Videos</h3>
-                    <button class="sample-popup-close" onclick="closeSamplePopup()">×</button>
-                </div>
-                <div class="sample-popup-content"></div>
-            `;
-            
-            document.body.appendChild(overlay);
-            document.body.appendChild(popup);
-            
-            return overlay;
-        }
-
-        function closeSamplePopup() {
-            const overlay = document.getElementById('sample-popup-overlay');
-            const popup = document.getElementById('sample-popup');
-            if (overlay) overlay.classList.remove('show');
-            if (popup) popup.classList.remove('show');
+        function hideSampleDropdown(id) {
+            // Small delay to allow moving mouse to dropdown
+            sampleDropdownTimeout = setTimeout(() => {
+                const dropdown = document.getElementById(`sample-dropdown-${id}`);
+                if (dropdown) {
+                    dropdown.style.display = 'none';
+                }
+                sampleDropdownTimeout = null;
+            }, 150);
         }
 
         function displayWhatSeemsWorking(working) {
@@ -903,9 +977,7 @@
                                             <td>${escapeHtml(item.value)}</td>
                                             <td style="color: #6c757d; font-size: 11px;">${bucketRange}</td>
                                             <td>
-                                                <span class="sample-size-link" onclick="showSamplePopup('${signalId}', ${JSON.stringify(item.videos || []).replace(/"/g, '&quot;')}, '${escapeHtml(item.feature)}', '${escapeHtml(item.value)}')">
-                                                    ${item.sample_size}
-                                                </span>
+                                                ${renderSampleSizeWithDropdown(item.sample_size, item.videos, signalId, item.feature, item.value)}
                                             </td>
                                             <td><span class="lift-value ${viewsLiftClass}">${item.lift_views.toFixed(2)}x</span></td>
                                             <td><span class="lift-value ${likesLiftClass}">${item.lift_likes.toFixed(2)}x</span></td>
@@ -935,8 +1007,33 @@
         }
 
         function displayPerVideoComparison(videos) {
-            const container = document.getElementById('perVideoComparison');
+            // This function is kept for backward compatibility but is no longer used
+            // The data is now split into IG and TikTok sections
+        }
+
+        function displayPerVideoComparisonIG(videos) {
+            const container = document.getElementById('perVideoComparisonIG');
             
+            if (!videos || videos.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No Instagram video comparison data available.</p></div>';
+                return;
+            }
+
+            renderPerVideoComparisonTable(videos, container);
+        }
+
+        function displayPerVideoComparisonTikTok(videos) {
+            const container = document.getElementById('perVideoComparisonTikTok');
+            
+            if (!videos || videos.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No TikTok video comparison data available.</p></div>';
+                return;
+            }
+
+            renderPerVideoComparisonTable(videos, container);
+        }
+
+        function renderPerVideoComparisonTable(videos, container) {
             if (!videos || videos.length === 0) {
                 container.innerHTML = '<div class="empty-state"><p>No video comparison data available.</p></div>';
                 return;
@@ -947,7 +1044,6 @@
                     <thead>
                         <tr>
                             <th>Video</th>
-                            <th>Platform</th>
                             <th>Performance Rank</th>
                             <th>Views</th>
                             <th>Likes</th>
@@ -969,7 +1065,6 @@
                                         <strong>${escapeHtml(video.trackName)}</strong><br>
                                         <small style="color: #666;">${escapeHtml(video.artistName)}</small>
                                     </td>
-                                    <td>${escapeHtml(video.platform || 'unknown')}</td>
                                     <td>
                                         <div style="position: relative;">
                                             <span class="performance-rank ${rankClass}">
@@ -1043,15 +1138,18 @@
                         </tr>
                     </thead>
                     <tbody>
-                        ${ranks.slice(0, 30).map(item => {
+                        ${ranks.slice(0, 30).map((item, index) => {
                             const vsMedianClass = item.vs_median_rank > 0 ? 'positive' : item.vs_median_rank < 0 ? 'negative' : 'neutral';
                             const vsMedianSign = item.vs_median_rank > 0 ? '+' : '';
+                            const signalId = `rank-${item.feature}-${item.value}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
                             
                             return `
                                 <tr>
                                     <td><strong>${escapeHtml(item.feature)}</strong></td>
                                     <td>${escapeHtml(item.value)}</td>
-                                    <td>${item.sample_size}</td>
+                                    <td>
+                                        ${renderSampleSizeWithDropdown(item.sample_size, item.videos, signalId, item.feature, item.value)}
+                                    </td>
                                     <td>${item.avg_rank.toFixed(2)}</td>
                                     <td><span class="metric-badge ${vsMedianClass}">${vsMedianSign}${item.vs_median_rank.toFixed(2)}</span></td>
                                 </tr>
@@ -1092,9 +1190,7 @@
                                     <td><strong>${escapeHtml(item.feature)}</strong></td>
                                     <td>${escapeHtml(item.value)}</td>
                                     <td>
-                                        <span class="sample-size-link" onclick="showSamplePopup('${signalId}', ${JSON.stringify(item.videos || []).replace(/"/g, '&quot;')}, '${escapeHtml(item.feature)}', '${escapeHtml(item.value)}')">
-                                            ${item.count}
-                                        </span>
+                                        ${renderSampleSizeWithDropdown(item.count, item.videos, signalId, item.feature, item.value)}
                                     </td>
                                     <td>${item.median_views_relative.toFixed(2)}</td>
                                     <td>${item.median_engagement_proxy.toFixed(3)}</td>
@@ -1165,12 +1261,162 @@
                 }
                 const videos = await response.json();
                 
+                // Display scatter chart
+                displayArtistFollowersScatter(videos);
+                
+                // Display scatter chart
+                displayArtistFollowersScatter(videos);
+                
                 // Display histogram
                 displayArtistFollowersHistogram(videos);
             } catch (err) {
                 console.error('Error loading charting data:', err);
+                document.getElementById('artistFollowersScatter').innerHTML = 
+                    '<div class="empty-state"><p>Error loading chart data.</p></div>';
                 document.getElementById('artistFollowersHistogram').innerHTML = 
                     '<div class="empty-state"><p>Error loading chart data.</p></div>';
+            }
+        }
+
+        function displayArtistFollowersScatter(videos) {
+            const container = document.getElementById('artistFollowersScatter');
+            
+            // Filter videos with both artistFollowers and views data
+            const validVideos = videos.filter(v => 
+                v.artistFollowers !== null && 
+                v.artistFollowers !== undefined && 
+                (v.igViews > 0 || v.tiktokViews > 0)
+            );
+            
+            if (validVideos.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No data available for scatter chart.</p></div>';
+                return;
+            }
+            
+            // Get data points (followers on x-axis, views on y-axis)
+            const dataPoints = validVideos.map(v => ({
+                followers: v.artistFollowers,
+                views: v.igViews || v.tiktokViews || 0,
+                trackName: v.trackName || 'Unknown',
+                artistName: v.artistName || 'Unknown'
+            }));
+            
+            // Find min/max for scaling
+            const minFollowers = Math.min(...dataPoints.map(d => d.followers));
+            const maxFollowers = Math.max(...dataPoints.map(d => d.followers));
+            const minViews = Math.min(...dataPoints.map(d => d.views));
+            const maxViews = Math.max(...dataPoints.map(d => d.views));
+            
+            // Chart dimensions
+            const chartWidth = 800;
+            const chartHeight = 400;
+            const marginLeft = 80;
+            const marginRight = 50;
+            const marginTop = 30;
+            const marginBottom = 60;
+            const plotWidth = chartWidth - marginLeft - marginRight;
+            const plotHeight = chartHeight - marginTop - marginBottom;
+            
+            // Scale functions
+            const scaleX = (followers) => {
+                if (maxFollowers === minFollowers) return plotWidth / 2;
+                return ((followers - minFollowers) / (maxFollowers - minFollowers)) * plotWidth;
+            };
+            
+            const scaleY = (views) => {
+                if (maxViews === minViews) return plotHeight / 2;
+                return plotHeight - ((views - minViews) / (maxViews - minViews)) * plotHeight;
+            };
+            
+            // Create scatter plot
+            let svg = `
+                <div style="margin-top: 15px;">
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Views (Scatter Plot)</h3>
+                    <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
+                        <!-- Y-axis label -->
+                        <text x="${marginLeft / 2}" y="${marginTop + plotHeight / 2}" transform="rotate(-90, ${marginLeft / 2}, ${marginTop + plotHeight / 2})" 
+                              style="font-size: 12px; fill: #666; text-anchor: middle;">Views</text>
+                        
+                        <!-- X-axis label -->
+                        <text x="${marginLeft + plotWidth / 2}" y="${chartHeight - 10}" 
+                              style="font-size: 12px; fill: #666; text-anchor: middle;">Artist Followers</text>
+                        
+                        <!-- X-axis -->
+                        <line x1="${marginLeft}" y1="${marginTop + plotHeight}" 
+                              x2="${marginLeft + plotWidth}" y2="${marginTop + plotHeight}" 
+                              style="stroke: #333; stroke-width: 2;" />
+                        
+                        <!-- Y-axis -->
+                        <line x1="${marginLeft}" y1="${marginTop}" 
+                              x2="${marginLeft}" y2="${marginTop + plotHeight}" 
+                              style="stroke: #333; stroke-width: 2;" />
+                        
+                        <!-- X-axis ticks and labels -->
+                        ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
+                            const x = marginLeft + (ratio * plotWidth);
+                            const value = Math.round(minFollowers + (maxFollowers - minFollowers) * ratio);
+                            return `
+                                <line x1="${x}" y1="${marginTop + plotHeight}" x2="${x}" y2="${marginTop + plotHeight + 5}" 
+                                      style="stroke: #666; stroke-width: 1;" />
+                                <text x="${x}" y="${marginTop + plotHeight + 20}" text-anchor="middle" 
+                                      style="font-size: 11px; fill: #666;">${value.toLocaleString()}</text>
+                            `;
+                        }).join('')}
+                        
+                        <!-- Y-axis ticks and labels -->
+                        ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
+                            const y = marginTop + plotHeight - (ratio * plotHeight);
+                            const value = Math.round(minViews + (maxViews - minViews) * ratio);
+                            return `
+                                <line x1="${marginLeft - 5}" y1="${y}" x2="${marginLeft}" y2="${y}" 
+                                      style="stroke: #666; stroke-width: 1;" />
+                                <text x="${marginLeft - 10}" y="${y + 4}" text-anchor="end" 
+                                      style="font-size: 11px; fill: #666;">${value.toLocaleString()}</text>
+                            `;
+                        }).join('')}
+                        
+                        <!-- Data points -->
+                        ${dataPoints.map((point, index) => {
+                            const x = marginLeft + scaleX(point.followers);
+                            const y = marginTop + scaleY(point.views);
+                            return `
+                                <circle cx="${x}" cy="${y}" r="4" 
+                                        style="fill: #007bff; stroke: #0056b3; stroke-width: 1; cursor: pointer;"
+                                        onmouseover="showScatterTooltip(event, '${escapeHtml(point.trackName)}', '${escapeHtml(point.artistName)}', ${point.followers}, ${point.views})"
+                                        onmouseout="hideScatterTooltip()" />
+                            `;
+                        }).join('')}
+                    </svg>
+                </div>
+            `;
+            
+            container.innerHTML = svg;
+        }
+
+        function showScatterTooltip(event, trackName, artistName, followers, views) {
+            let tooltip = document.getElementById('scatter-tooltip');
+            if (!tooltip) {
+                tooltip = document.createElement('div');
+                tooltip.id = 'scatter-tooltip';
+                tooltip.style.cssText = 'display: none; position: absolute; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 6px; font-size: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10000; pointer-events: none;';
+                document.body.appendChild(tooltip);
+            }
+            
+            tooltip.innerHTML = `
+                <strong>${trackName}</strong><br>
+                ${artistName}<br>
+                Followers: ${followers.toLocaleString()}<br>
+                Views: ${views.toLocaleString()}
+            `;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (event.pageX + 10) + 'px';
+            tooltip.style.top = (event.pageY - 10) + 'px';
+        }
+
+        function hideScatterTooltip() {
+            const tooltip = document.getElementById('scatter-tooltip');
+            if (tooltip) {
+                tooltip.style.display = 'none';
             }
         }
 

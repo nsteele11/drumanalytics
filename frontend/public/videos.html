@@ -112,7 +112,7 @@ function createVideoCard(video) {
                     ${video.duration ? `<div class="video-meta-item"><strong>Duration:</strong> ${formatDuration(video.duration)}</div>` : ''}
                     ${video.bpm ? `<div class="video-meta-item"><strong>BPM:</strong> ${video.bpm}</div>` : ''}
                     ${video.shockValue !== null ? `<div class="video-meta-item"><strong>Shock Value:</strong> <span class="clickable-score" style="font-weight: bold; color: ${getShockValueColorWithTop20(video.shockValue, allVideosForShockValue)}; cursor: pointer; text-decoration: underline;" onclick="showShockValuePopup(${video.shockValue}, ${video.tempoSpikes !== null ? video.tempoSpikes : 'null'}, ${video.volumeSpikes !== null ? video.volumeSpikes : 'null'}, ${video.unusualPatterns !== null ? video.unusualPatterns : 'null'})">${video.shockValue}/100</span></div>` : ''}
-                    ${video.successScore !== null && video.successScore !== undefined ? `<div class="video-meta-item"><strong>Video Success Score:</strong> <span class="clickable-score" style="font-weight: bold; color: ${getSuccessScoreColor(video.successScore)}; cursor: pointer; text-decoration: underline;" onclick="showSuccessScorePopup(${video.igViews || 0}, ${video.igLikes || 0}, ${video.tiktokViews || 0}, ${video.tiktokLikes || 0}, ${video.successScore})">${video.successScore}/100</span></div>` : ''}
+                    ${video.successScore !== null && video.successScore !== undefined ? `<div class="video-meta-item"><strong>Video Success Score:</strong> <span class="clickable-score" style="font-weight: bold; color: ${getSuccessScoreColor(video.successScore)}; cursor: pointer; text-decoration: underline;" onclick="showSuccessScorePopup(${video.igViews || 0}, ${video.igLikes || 0}, ${video.tiktokViews || 0}, ${video.tiktokLikes || 0}, ${video.successScore}, ${JSON.stringify(allVideosForShockValue).replace(/"/g, '&quot;')})">${video.successScore}/100</span></div>` : ''}
                     ${video.successRank !== null && video.successRank !== undefined ? `<div class="video-meta-item"><strong>Video Rank:</strong> <span style="font-weight: bold; color: ${getSuccessRankColor(video.successRank)};">#${video.successRank}</span></div>` : ''}
                     
                     <!-- Social Media Metrics Section -->
@@ -659,80 +659,100 @@ function showSuccessScorePopup(igViews, igLikes, tiktokViews, tiktokLikes, succe
     const tiktokViewsMedian = calculateMedian(tiktokViewsValues);
     const tiktokLikesMedian = calculateMedian(tiktokLikesValues);
     
-    // Calculate component scores (capped at maximums to match backend calculation)
-    let igViewsScore = 0;
-    let igLikesScore = 0;
-    let tiktokViewsScore = 0;
-    let tiktokLikesScore = 0;
+    // Calculate engagement rate medians
+    const igEngagementRates = allVideosForShockValue
+        .filter(v => v.igViews > 0 && v.igLikes !== null && v.igLikes >= 0)
+        .map(v => v.igLikes / v.igViews);
+    const tiktokEngagementRates = allVideosForShockValue
+        .filter(v => v.tiktokViews > 0 && v.tiktokLikes !== null && v.tiktokLikes >= 0)
+        .map(v => v.tiktokLikes / v.tiktokViews);
+    
+    const igEngagementMedian = calculateMedian(igEngagementRates);
+    const tiktokEngagementMedian = calculateMedian(tiktokEngagementRates);
+    
+    // Calculate component scores (equally weighted, normalized to median, capped at 2x)
+    const metrics = [];
+    let metricLabels = [];
     
     if (igViews > 0 && igViewsMedian > 0) {
-        igViewsScore = Math.min((igViews / igViewsMedian) * 30, 30); // Cap at 30
+        const ratio = Math.min(igViews / igViewsMedian, 2);
+        metrics.push(ratio);
+        metricLabels.push({ name: 'IG Views', ratio: ratio, value: igViews, median: igViewsMedian });
     }
-    if (igLikes > 0 && igLikesMedian > 0) {
-        igLikesScore = Math.min((igLikes / igLikesMedian) * 20, 20); // Cap at 20
+    if (igLikes !== null && igLikes !== undefined && igLikes >= 0 && igLikesMedian > 0) {
+        const ratio = Math.min(igLikes / igLikesMedian, 2);
+        metrics.push(ratio);
+        metricLabels.push({ name: 'IG Likes', ratio: ratio, value: igLikes, median: igLikesMedian });
+    }
+    if (igViews > 0 && igLikes !== null && igLikes !== undefined && igLikes >= 0 && igEngagementMedian > 0) {
+        const engagementRate = igLikes / igViews;
+        const ratio = Math.min(engagementRate / igEngagementMedian, 2);
+        metrics.push(ratio);
+        metricLabels.push({ name: 'IG Engagement', ratio: ratio, value: engagementRate, median: igEngagementMedian });
     }
     if (tiktokViews > 0 && tiktokViewsMedian > 0) {
-        tiktokViewsScore = Math.min((tiktokViews / tiktokViewsMedian) * 30, 30); // Cap at 30
+        const ratio = Math.min(tiktokViews / tiktokViewsMedian, 2);
+        metrics.push(ratio);
+        metricLabels.push({ name: 'TikTok Views', ratio: ratio, value: tiktokViews, median: tiktokViewsMedian });
     }
-    if (tiktokLikes > 0 && tiktokLikesMedian > 0) {
-        tiktokLikesScore = Math.min((tiktokLikes / tiktokLikesMedian) * 20, 20); // Cap at 20
+    if (tiktokLikes !== null && tiktokLikes !== undefined && tiktokLikes >= 0 && tiktokLikesMedian > 0) {
+        const ratio = Math.min(tiktokLikes / tiktokLikesMedian, 2);
+        metrics.push(ratio);
+        metricLabels.push({ name: 'TikTok Likes', ratio: ratio, value: tiktokLikes, median: tiktokLikesMedian });
+    }
+    if (tiktokViews > 0 && tiktokLikes !== null && tiktokLikes !== undefined && tiktokLikes >= 0 && tiktokEngagementMedian > 0) {
+        const engagementRate = tiktokLikes / tiktokViews;
+        const ratio = Math.min(engagementRate / tiktokEngagementMedian, 2);
+        metrics.push(ratio);
+        metricLabels.push({ name: 'TikTok Engagement', ratio: ratio, value: engagementRate, median: tiktokEngagementMedian });
     }
     
     const hasBothPlatforms = (igViews > 0) && (tiktokViews > 0);
+    
+    // Calculate average ratio for display
+    const avgRatio = metrics.length > 0 
+        ? metrics.reduce((sum, ratio) => sum + ratio, 0) / metrics.length 
+        : 0;
     
     content.innerHTML = `
         <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
             <strong>Success Score Breakdown</strong>
         </div>
         <div style="margin-top: 15px;">
-            ${igViews > 0 ? `
-                <div style="margin-bottom: 10px;">
-                    <strong style="color: #333;">📷 Instagram</strong>
-                </div>
-                <div style="margin-left: 15px; margin-bottom: 12px;">
-                    <div style="margin-bottom: 8px;">
-                        <span>Views Score:</span>
-                        <span style="float: right; font-weight: 600;">${igViewsScore.toFixed(1)}/30</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                            ${igViews.toLocaleString()} views (median: ${igViewsMedian.toLocaleString()})
+            ${metricLabels.map(metric => {
+                const isEngagement = metric.name.includes('Engagement');
+                const displayValue = isEngagement 
+                    ? (metric.value * 100).toFixed(2) + '%'
+                    : metric.value.toLocaleString();
+                const displayMedian = isEngagement 
+                    ? (metric.median * 100).toFixed(2) + '%'
+                    : metric.median.toLocaleString();
+                const ratioPercent = (metric.ratio * 100).toFixed(1);
+                
+                return `
+                    <div style="margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span><strong>${metric.name}:</strong></span>
+                            <span style="font-weight: 600;">${ratioPercent}% of median</span>
+                        </div>
+                        <div style="font-size: 11px; color: #666; margin-left: 10px;">
+                            ${displayValue} (median: ${displayMedian})
                         </div>
                     </div>
-                    <div style="margin-bottom: 12px;">
-                        <span>Likes Score:</span>
-                        <span style="float: right; font-weight: 600;">${igLikesScore.toFixed(1)}/20</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                            ${igLikes.toLocaleString()} likes (median: ${igLikesMedian.toLocaleString()})
-                        </div>
-                    </div>
-                </div>
-            ` : ''}
-            ${tiktokViews > 0 ? `
-                <div style="margin-bottom: 10px;">
-                    <strong style="color: #333;">🎵 TikTok</strong>
-                </div>
-                <div style="margin-left: 15px; margin-bottom: 12px;">
-                    <div style="margin-bottom: 8px;">
-                        <span>Views Score:</span>
-                        <span style="float: right; font-weight: 600;">${tiktokViewsScore.toFixed(1)}/30</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                            ${tiktokViews.toLocaleString()} views (median: ${tiktokViewsMedian.toLocaleString()})
-                        </div>
-                    </div>
-                    <div style="margin-bottom: 12px;">
-                        <span>Likes Score:</span>
-                        <span style="float: right; font-weight: 600;">${tiktokLikesScore.toFixed(1)}/20</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                            ${tiktokLikes.toLocaleString()} likes (median: ${tiktokLikesMedian.toLocaleString()})
-                        </div>
-                    </div>
-                </div>
-            ` : ''}
+                `;
+            }).join('')}
             <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e9ecef;">
-                <strong style="color: #333; font-size: 16px;">Total Success Score:</strong>
-                <span style="float: right; font-weight: 700; font-size: 16px; color: ${getSuccessScoreColor(successScore)};">${successScore}/100</span>
+                <div style="margin-bottom: 8px;">
+                    <strong style="color: #333; font-size: 14px;">Average Ratio:</strong>
+                    <span style="float: right; font-weight: 600;">${(avgRatio * 100).toFixed(1)}%</span>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <strong style="color: #333; font-size: 16px;">Total Success Score:</strong>
+                    <span style="float: right; font-weight: 700; font-size: 16px; color: ${getSuccessScoreColor(successScore)};">${successScore}/100</span>
+                </div>
             </div>
             <div style="margin-top: 10px; font-size: 11px; color: #666; font-style: italic;">
-                ${hasBothPlatforms ? 'Combined score from both platforms' : 'Scaled score from single platform'}
+                Equally weighted average of ${metrics.length} metric${metrics.length !== 1 ? 's' : ''}. Score = (avg ratio / 2.0) × 100
             </div>
         </div>
     `;

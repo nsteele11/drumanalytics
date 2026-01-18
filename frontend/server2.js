@@ -471,48 +471,78 @@ app.get("/api/videos", async (req, res) => {
     const tiktokViewsMedian = calculateMedian(tiktokViewsValues);
     const tiktokLikesMedian = calculateMedian(tiktokLikesValues);
 
+    // Calculate engagement rate medians (likes/views)
+    const igEngagementRates = allVideosData
+      .filter(v => v.igViews > 0 && v.igLikes !== null && v.igLikes !== undefined && v.igLikes >= 0)
+      .map(v => v.igLikes / v.igViews);
+    const tiktokEngagementRates = allVideosData
+      .filter(v => v.tiktokViews > 0 && v.tiktokLikes !== null && v.tiktokLikes !== undefined && v.tiktokLikes >= 0)
+      .map(v => v.tiktokLikes / v.tiktokViews);
+
+    const igEngagementMedian = calculateMedian(igEngagementRates);
+    const tiktokEngagementMedian = calculateMedian(tiktokEngagementRates);
+
     // Calculate success score for each video
+    // Equally weight all available metrics: views, likes, and engagement rate (likes/views)
     allVideosData.forEach(video => {
-      let successScore = 0;
+      const metrics = [];
       let hasMetrics = false;
 
-      // IG metrics contribution (50% weight)
-      // Cap each component at its maximum to ensure scores don't exceed 100
+      // IG metrics
       if (video.igViews !== null && video.igViews !== undefined && video.igViews > 0) {
         hasMetrics = true;
-        const viewsScore = igViewsMedian > 0 
-          ? Math.min((video.igViews / igViewsMedian) * 30, 30) // Cap at 30
-          : 0;
-        const likesScore = video.igLikes !== null && video.igLikes !== undefined && video.igLikes > 0 && igLikesMedian > 0
-          ? Math.min((video.igLikes / igLikesMedian) * 20, 20) // Cap at 20
-          : 0;
-        successScore += viewsScore + likesScore;
+        // Views score (normalized to median)
+        if (igViewsMedian > 0) {
+          const viewsRatio = Math.min(video.igViews / igViewsMedian, 2); // Cap at 2x median
+          metrics.push(viewsRatio);
+        }
+        
+        // Likes score (normalized to median)
+        if (video.igLikes !== null && video.igLikes !== undefined && video.igLikes >= 0 && igLikesMedian > 0) {
+          const likesRatio = Math.min(video.igLikes / igLikesMedian, 2); // Cap at 2x median
+          metrics.push(likesRatio);
+        }
+        
+        // Engagement rate score (likes/views, normalized to median engagement rate)
+        if (video.igLikes !== null && video.igLikes !== undefined && video.igLikes >= 0 && 
+            video.igViews > 0 && igEngagementMedian > 0) {
+          const engagementRate = video.igLikes / video.igViews;
+          const engagementRatio = Math.min(engagementRate / igEngagementMedian, 2); // Cap at 2x median
+          metrics.push(engagementRatio);
+        }
       }
 
-      // TikTok metrics contribution (50% weight)
-      // Cap each component at its maximum to ensure scores don't exceed 100
+      // TikTok metrics
       if (video.tiktokViews !== null && video.tiktokViews !== undefined && video.tiktokViews > 0) {
         hasMetrics = true;
-        const viewsScore = tiktokViewsMedian > 0 
-          ? Math.min((video.tiktokViews / tiktokViewsMedian) * 30, 30) // Cap at 30
-          : 0;
-        const likesScore = video.tiktokLikes !== null && video.tiktokLikes !== undefined && video.tiktokLikes > 0 && tiktokLikesMedian > 0
-          ? Math.min((video.tiktokLikes / tiktokLikesMedian) * 20, 20) // Cap at 20
-          : 0;
-        successScore += viewsScore + likesScore;
+        // Views score (normalized to median)
+        if (tiktokViewsMedian > 0) {
+          const viewsRatio = Math.min(video.tiktokViews / tiktokViewsMedian, 2); // Cap at 2x median
+          metrics.push(viewsRatio);
+        }
+        
+        // Likes score (normalized to median)
+        if (video.tiktokLikes !== null && video.tiktokLikes !== undefined && video.tiktokLikes >= 0 && tiktokLikesMedian > 0) {
+          const likesRatio = Math.min(video.tiktokLikes / tiktokLikesMedian, 2); // Cap at 2x median
+          metrics.push(likesRatio);
+        }
+        
+        // Engagement rate score (likes/views, normalized to median engagement rate)
+        if (video.tiktokLikes !== null && video.tiktokLikes !== undefined && video.tiktokLikes >= 0 && 
+            video.tiktokViews > 0 && tiktokEngagementMedian > 0) {
+          const engagementRate = video.tiktokLikes / video.tiktokViews;
+          const engagementRatio = Math.min(engagementRate / tiktokEngagementMedian, 2); // Cap at 2x median
+          metrics.push(engagementRatio);
+        }
       }
 
-      // If video has metrics on both platforms, normalize to 0-100 scale
-      // If only one platform, scale appropriately
-      const hasBothPlatforms = (video.igViews !== null && video.igViews > 0) && 
-                                (video.tiktokViews !== null && video.tiktokViews > 0);
-      
-      if (hasBothPlatforms) {
-        // Both platforms: max score is 100 (30+20+30+20), already capped
-        video.successScore = Math.min(Math.round(successScore), 100); // Ensure it doesn't exceed 100
-      } else if (hasMetrics) {
-        // Single platform: max score is 50, scale to 100
-        video.successScore = Math.min(Math.round(successScore * 2), 100); // Ensure it doesn't exceed 100
+      // Calculate success score: equally weight all metrics
+      if (hasMetrics && metrics.length > 0) {
+        // Average all metrics and scale to 0-100
+        const avgRatio = metrics.reduce((sum, ratio) => sum + ratio, 0) / metrics.length;
+        // Scale: if avgRatio is 1.0 (at median), score is 50. If avgRatio is 2.0 (2x median), score is 100.
+        // Linear scaling: score = (avgRatio / 2.0) * 100, capped at 100
+        video.successScore = Math.min(Math.round((avgRatio / 2.0) * 100), 100);
       } else {
         video.successScore = null;
       }
