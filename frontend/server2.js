@@ -477,21 +477,27 @@ app.get("/api/videos", async (req, res) => {
       let hasMetrics = false;
 
       // IG metrics contribution (50% weight)
+      // Cap each component at its maximum to ensure scores don't exceed 100
       if (video.igViews !== null && video.igViews !== undefined && video.igViews > 0) {
         hasMetrics = true;
-        const viewsScore = igViewsMedian > 0 ? (video.igViews / igViewsMedian) * 30 : 0;
+        const viewsScore = igViewsMedian > 0 
+          ? Math.min((video.igViews / igViewsMedian) * 30, 30) // Cap at 30
+          : 0;
         const likesScore = video.igLikes !== null && video.igLikes !== undefined && video.igLikes > 0 && igLikesMedian > 0
-          ? (video.igLikes / igLikesMedian) * 20
+          ? Math.min((video.igLikes / igLikesMedian) * 20, 20) // Cap at 20
           : 0;
         successScore += viewsScore + likesScore;
       }
 
       // TikTok metrics contribution (50% weight)
+      // Cap each component at its maximum to ensure scores don't exceed 100
       if (video.tiktokViews !== null && video.tiktokViews !== undefined && video.tiktokViews > 0) {
         hasMetrics = true;
-        const viewsScore = tiktokViewsMedian > 0 ? (video.tiktokViews / tiktokViewsMedian) * 30 : 0;
+        const viewsScore = tiktokViewsMedian > 0 
+          ? Math.min((video.tiktokViews / tiktokViewsMedian) * 30, 30) // Cap at 30
+          : 0;
         const likesScore = video.tiktokLikes !== null && video.tiktokLikes !== undefined && video.tiktokLikes > 0 && tiktokLikesMedian > 0
-          ? (video.tiktokLikes / tiktokLikesMedian) * 20
+          ? Math.min((video.tiktokLikes / tiktokLikesMedian) * 20, 20) // Cap at 20
           : 0;
         successScore += viewsScore + likesScore;
       }
@@ -502,11 +508,11 @@ app.get("/api/videos", async (req, res) => {
                                 (video.tiktokViews !== null && video.tiktokViews > 0);
       
       if (hasBothPlatforms) {
-        // Both platforms: max score is 100 (30+20+30+20)
-        video.successScore = Math.round(successScore);
+        // Both platforms: max score is 100 (30+20+30+20), already capped
+        video.successScore = Math.min(Math.round(successScore), 100); // Ensure it doesn't exceed 100
       } else if (hasMetrics) {
         // Single platform: max score is 50, scale to 100
-        video.successScore = Math.round(successScore * 2);
+        video.successScore = Math.min(Math.round(successScore * 2), 100); // Ensure it doesn't exceed 100
       } else {
         video.successScore = null;
       }

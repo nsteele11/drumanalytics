@@ -358,13 +358,20 @@ function computeLiftAnalysis(videos) {
     const liftViews = pHighView > 0 ? pHighViewGivenFeature / pHighView : 0;
     const liftLikes = pHighLike > 0 ? pHighLikeGivenFeature / pHighLike : 0;
 
+    // Collect video information for this feature
+    const videoInfo = featureVideos.map(v => ({
+      trackName: v.trackName || 'Unknown',
+      artistName: v.artistName || 'Unknown'
+    }));
+
     liftResults.push({
       feature,
       value,
       sample_size: featureCount,
       lift_views: Math.round(liftViews * 100) / 100,
       lift_likes: Math.round(liftLikes * 100) / 100,
-      confidence: 'early'
+      confidence: 'early',
+      videos: videoInfo
     });
   });
 
@@ -424,11 +431,39 @@ function computeRankAssociation(videos) {
 
   const rankResults = [];
 
-  featureValueMap.forEach(({ feature, value, ranks }) => {
+  featureValueMap.forEach(({ feature, value, ranks }, key) => {
     if (ranks.length < 2) return; // Only report if appears in ≥2 videos
 
     const avgRank = ranks.reduce((a, b) => a + b, 0) / ranks.length;
     const vsMedian = avgRank - globalMedianRank;
+
+    // Get videos for this feature (need to find them from processedVideos)
+    const videos = [];
+    processedVideos.forEach(video => {
+      const classifications = classifyMetadata(video);
+      Object.entries(classifications).forEach(([f, v]) => {
+        if (v === null || v === undefined) return;
+        
+        let featureName = f;
+        let featureValue = String(v);
+        
+        if (f.startsWith('genre:')) {
+          featureName = 'genre';
+          featureValue = v;
+        } else if (f.startsWith('ig_hashtag:') || f.startsWith('tiktok_hashtag:')) {
+          const platform = f.startsWith('ig_hashtag:') ? 'ig_hashtag' : 'tiktok_hashtag';
+          featureName = platform;
+          featureValue = v;
+        }
+        
+        if (featureName === feature && featureValue === value) {
+          videos.push({
+            trackName: video.trackName || 'Unknown',
+            artistName: video.artistName || 'Unknown'
+          });
+        }
+      });
+    });
 
     rankResults.push({
       feature,
@@ -436,7 +471,8 @@ function computeRankAssociation(videos) {
       sample_size: ranks.length,
       avg_rank: Math.round(avgRank * 100) / 100,
       vs_median_rank: Math.round(vsMedian * 100) / 100,
-      confidence: 'early'
+      confidence: 'early',
+      videos: videos
     });
   });
 
@@ -481,7 +517,11 @@ function computeDistributionSummary(videos) {
       featureMap.get(featureName).push({
         value: featureValue,
         views_relative: video.views_relative,
-        engagement_proxy: video.engagement_proxy
+        engagement_proxy: video.engagement_proxy,
+        video: {
+          trackName: video.trackName || 'Unknown',
+          artistName: video.artistName || 'Unknown'
+        }
       });
     });
   });
@@ -491,18 +531,22 @@ function computeDistributionSummary(videos) {
   featureMap.forEach((values, feature) => {
     // Group by value
     const valueGroups = new Map();
-    values.forEach(({ value, views_relative, engagement_proxy }) => {
+    values.forEach(({ value, views_relative, engagement_proxy, video }) => {
       if (!valueGroups.has(value)) {
         valueGroups.set(value, {
           views_relative: [],
-          engagement_proxy: []
+          engagement_proxy: [],
+          videos: []
         });
       }
       valueGroups.get(value).views_relative.push(views_relative);
       valueGroups.get(value).engagement_proxy.push(engagement_proxy);
+      if (video) {
+        valueGroups.get(value).videos.push(video);
+      }
     });
 
-    valueGroups.forEach(({ views_relative: vr, engagement_proxy: ep }, value) => {
+    valueGroups.forEach(({ views_relative: vr, engagement_proxy: ep, videos }, value) => {
       if (vr.length < 2) return; // Only report if appears in ≥2 videos
 
       const medianViewsRelative = calculateMedian(vr);
@@ -513,7 +557,8 @@ function computeDistributionSummary(videos) {
         value,
         count: vr.length,
         median_views_relative: Math.round(medianViewsRelative * 100) / 100,
-        median_engagement_proxy: Math.round(medianEngagementProxy * 1000) / 1000
+        median_engagement_proxy: Math.round(medianEngagementProxy * 1000) / 1000,
+        videos: videos || []
       });
     });
   });
@@ -609,7 +654,8 @@ function generateStructuredOutputs(videos) {
       sample_size: lift.sample_size,
       lift_views: lift.lift_views,
       lift_likes: lift.lift_likes,
-      confidence: lift.confidence
+      confidence: lift.confidence,
+      videos: lift.videos || []
     };
   });
 
@@ -658,7 +704,8 @@ function generateStructuredOutputs(videos) {
       lift_likes: lift.lift_likes,
       appearances_in_top_30_percent: appearancesInTopVideos,
       consistency_score: Math.round(consistencyScore * 100) / 100,
-      sample_size: lift.sample_size
+      sample_size: lift.sample_size,
+      videos: lift.videos || []
     };
   })
   .filter(item => item.lift_views > 1 || item.lift_likes > 1) // Only positive lift

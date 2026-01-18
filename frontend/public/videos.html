@@ -60,6 +60,9 @@ async function loadVideos() {
             return;
         }
 
+        // Store videos for shock value color calculation
+        allVideosForShockValue = videos;
+        
         // Display videos
         videos.forEach(video => {
             const videoCard = createVideoCard(video);
@@ -108,8 +111,8 @@ function createVideoCard(video) {
                     ${video.genres && video.genres.length > 0 ? `<div class="video-meta-item"><strong>Genres:</strong> ${escapeHtml(video.genres.join(', '))}</div>` : ''}
                     ${video.duration ? `<div class="video-meta-item"><strong>Duration:</strong> ${formatDuration(video.duration)}</div>` : ''}
                     ${video.bpm ? `<div class="video-meta-item"><strong>BPM:</strong> ${video.bpm}</div>` : ''}
-                    ${video.shockValue !== null ? `<div class="video-meta-item"><strong>Shock Value:</strong> <span style="font-weight: bold; color: ${getShockValueColor(video.shockValue)};">${video.shockValue}/100</span></div>` : ''}
-                    ${video.successScore !== null && video.successScore !== undefined ? `<div class="video-meta-item"><strong>Video Success Score:</strong> <span style="font-weight: bold; color: ${getSuccessScoreColor(video.successScore)};">${video.successScore}/100</span></div>` : ''}
+                    ${video.shockValue !== null ? `<div class="video-meta-item"><strong>Shock Value:</strong> <span class="clickable-score" style="font-weight: bold; color: ${getShockValueColorWithTop20(video.shockValue, allVideosForShockValue)}; cursor: pointer; text-decoration: underline;" onclick="showShockValuePopup(${video.shockValue}, ${video.tempoSpikes !== null ? video.tempoSpikes : 'null'}, ${video.volumeSpikes !== null ? video.volumeSpikes : 'null'}, ${video.unusualPatterns !== null ? video.unusualPatterns : 'null'})">${video.shockValue}/100</span></div>` : ''}
+                    ${video.successScore !== null && video.successScore !== undefined ? `<div class="video-meta-item"><strong>Video Success Score:</strong> <span class="clickable-score" style="font-weight: bold; color: ${getSuccessScoreColor(video.successScore)}; cursor: pointer; text-decoration: underline;" onclick="showSuccessScorePopup(${video.igViews || 0}, ${video.igLikes || 0}, ${video.tiktokViews || 0}, ${video.tiktokLikes || 0}, ${video.successScore})">${video.successScore}/100</span></div>` : ''}
                     ${video.successRank !== null && video.successRank !== undefined ? `<div class="video-meta-item"><strong>Video Rank:</strong> <span style="font-weight: bold; color: ${getSuccessRankColor(video.successRank)};">#${video.successRank}</span></div>` : ''}
                     
                     <!-- Social Media Metrics Section -->
@@ -282,10 +285,34 @@ function formatDuration(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+// Store all videos for calculating top 20%
+let allVideosForShockValue = [];
+
 function getShockValueColor(score) {
-    if (score >= 70) return '#dc3545'; // Red - high shock
-    if (score >= 40) return '#ffc107'; // Yellow - medium shock
-    return '#28a745'; // Green - low shock
+    // All black by default, top 20% will be green
+    return '#000000'; // Black
+}
+
+function getShockValueColorWithTop20(score, allVideos) {
+    if (!allVideos || allVideos.length === 0) return '#000000';
+    
+    // Filter videos with shock values
+    const videosWithShock = allVideos.filter(v => v.shockValue !== null && v.shockValue !== undefined);
+    if (videosWithShock.length === 0) return '#000000';
+    
+    // Sort by shock value descending
+    const sorted = [...videosWithShock].sort((a, b) => b.shockValue - a.shockValue);
+    
+    // Calculate top 20% threshold
+    const top20Count = Math.max(1, Math.ceil(sorted.length * 0.2));
+    const top20Threshold = sorted[top20Count - 1].shockValue;
+    
+    // If this score is in top 20%, make it green
+    if (score >= top20Threshold) {
+        return '#28a745'; // Green - top 20%
+    }
+    
+    return '#000000'; // Black - all others
 }
 
 function getSuccessScoreColor(score) {
@@ -563,9 +590,271 @@ async function openHashtagSuggestionsModal(video) {
     }
 }
 
+// Popup functions for shock value and success score
+function showShockValuePopup(shockValue, tempoSpikes, volumeSpikes, unusualPatterns) {
+    const overlay = document.getElementById('score-popup-overlay') || createScorePopupElements();
+    const popup = document.getElementById('score-popup');
+    
+    const content = popup.querySelector('.score-popup-content');
+    const hasComponents = tempoSpikes !== null || volumeSpikes !== null || unusualPatterns !== null;
+    
+    if (hasComponents) {
+        content.innerHTML = `
+            <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
+                <strong>Shock Value Breakdown</strong>
+            </div>
+            <div style="margin-top: 15px;">
+                <div style="margin-bottom: 12px;">
+                    <strong style="color: #333;">Tempo Spikes (Fills):</strong>
+                    <span style="float: right; font-weight: 600;">${tempoSpikes !== null ? tempoSpikes.toFixed(1) : 'N/A'}/100</span>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <strong style="color: #333;">Volume Spikes (Accents):</strong>
+                    <span style="float: right; font-weight: 600;">${volumeSpikes !== null ? volumeSpikes.toFixed(1) : 'N/A'}/100</span>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <strong style="color: #333;">Unusual Patterns:</strong>
+                    <span style="float: right; font-weight: 600;">${unusualPatterns !== null ? unusualPatterns.toFixed(1) : 'N/A'}/100</span>
+                </div>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e9ecef;">
+                    <strong style="color: #333; font-size: 16px;">Total Shock Value:</strong>
+                    <span style="float: right; font-weight: 700; font-size: 16px; color: ${getShockValueColorWithTop20(shockValue, allVideosForShockValue)};">${shockValue}/100</span>
+                </div>
+                <div style="margin-top: 10px; font-size: 11px; color: #666; font-style: italic;">
+                    Weighted combination of the three components above
+                </div>
+            </div>
+        `;
+    } else {
+        content.innerHTML = '<p>No detailed shock value components available for this video.</p>';
+    }
+    
+    overlay.classList.add('show');
+    popup.classList.add('show');
+}
+
+function showSuccessScorePopup(igViews, igLikes, tiktokViews, tiktokLikes, successScore) {
+    const overlay = document.getElementById('score-popup-overlay') || createScorePopupElements();
+    const popup = document.getElementById('score-popup');
+    
+    const content = popup.querySelector('.score-popup-content');
+    
+    // Calculate medians for normalization display
+    const igViewsValues = allVideosForShockValue.filter(v => v.igViews > 0).map(v => v.igViews);
+    const igLikesValues = allVideosForShockValue.filter(v => v.igLikes > 0).map(v => v.igLikes);
+    const tiktokViewsValues = allVideosForShockValue.filter(v => v.tiktokViews > 0).map(v => v.tiktokViews);
+    const tiktokLikesValues = allVideosForShockValue.filter(v => v.tiktokLikes > 0).map(v => v.tiktokLikes);
+    
+    const calculateMedian = (values) => {
+        if (values.length === 0) return 0;
+        const sorted = [...values].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+    };
+    
+    const igViewsMedian = calculateMedian(igViewsValues);
+    const igLikesMedian = calculateMedian(igLikesValues);
+    const tiktokViewsMedian = calculateMedian(tiktokViewsValues);
+    const tiktokLikesMedian = calculateMedian(tiktokLikesValues);
+    
+    // Calculate component scores (capped at maximums to match backend calculation)
+    let igViewsScore = 0;
+    let igLikesScore = 0;
+    let tiktokViewsScore = 0;
+    let tiktokLikesScore = 0;
+    
+    if (igViews > 0 && igViewsMedian > 0) {
+        igViewsScore = Math.min((igViews / igViewsMedian) * 30, 30); // Cap at 30
+    }
+    if (igLikes > 0 && igLikesMedian > 0) {
+        igLikesScore = Math.min((igLikes / igLikesMedian) * 20, 20); // Cap at 20
+    }
+    if (tiktokViews > 0 && tiktokViewsMedian > 0) {
+        tiktokViewsScore = Math.min((tiktokViews / tiktokViewsMedian) * 30, 30); // Cap at 30
+    }
+    if (tiktokLikes > 0 && tiktokLikesMedian > 0) {
+        tiktokLikesScore = Math.min((tiktokLikes / tiktokLikesMedian) * 20, 20); // Cap at 20
+    }
+    
+    const hasBothPlatforms = (igViews > 0) && (tiktokViews > 0);
+    
+    content.innerHTML = `
+        <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
+            <strong>Success Score Breakdown</strong>
+        </div>
+        <div style="margin-top: 15px;">
+            ${igViews > 0 ? `
+                <div style="margin-bottom: 10px;">
+                    <strong style="color: #333;">📷 Instagram</strong>
+                </div>
+                <div style="margin-left: 15px; margin-bottom: 12px;">
+                    <div style="margin-bottom: 8px;">
+                        <span>Views Score:</span>
+                        <span style="float: right; font-weight: 600;">${igViewsScore.toFixed(1)}/30</span>
+                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                            ${igViews.toLocaleString()} views (median: ${igViewsMedian.toLocaleString()})
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <span>Likes Score:</span>
+                        <span style="float: right; font-weight: 600;">${igLikesScore.toFixed(1)}/20</span>
+                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                            ${igLikes.toLocaleString()} likes (median: ${igLikesMedian.toLocaleString()})
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+            ${tiktokViews > 0 ? `
+                <div style="margin-bottom: 10px;">
+                    <strong style="color: #333;">🎵 TikTok</strong>
+                </div>
+                <div style="margin-left: 15px; margin-bottom: 12px;">
+                    <div style="margin-bottom: 8px;">
+                        <span>Views Score:</span>
+                        <span style="float: right; font-weight: 600;">${tiktokViewsScore.toFixed(1)}/30</span>
+                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                            ${tiktokViews.toLocaleString()} views (median: ${tiktokViewsMedian.toLocaleString()})
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <span>Likes Score:</span>
+                        <span style="float: right; font-weight: 600;">${tiktokLikesScore.toFixed(1)}/20</span>
+                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                            ${tiktokLikes.toLocaleString()} likes (median: ${tiktokLikesMedian.toLocaleString()})
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e9ecef;">
+                <strong style="color: #333; font-size: 16px;">Total Success Score:</strong>
+                <span style="float: right; font-weight: 700; font-size: 16px; color: ${getSuccessScoreColor(successScore)};">${successScore}/100</span>
+            </div>
+            <div style="margin-top: 10px; font-size: 11px; color: #666; font-style: italic;">
+                ${hasBothPlatforms ? 'Combined score from both platforms' : 'Scaled score from single platform'}
+            </div>
+        </div>
+    `;
+    
+    overlay.classList.add('show');
+    popup.classList.add('show');
+}
+
+function createScorePopupElements() {
+    const overlay = document.createElement('div');
+    overlay.id = 'score-popup-overlay';
+    overlay.className = 'popup-overlay';
+    overlay.onclick = closeScorePopup;
+    
+    const popup = document.createElement('div');
+    popup.id = 'score-popup';
+    popup.className = 'score-popup';
+    popup.onclick = (e) => e.stopPropagation();
+    
+    popup.innerHTML = `
+        <div class="score-popup-header">
+            <h3>Score Breakdown</h3>
+            <button class="score-popup-close" onclick="closeScorePopup()">×</button>
+        </div>
+        <div class="score-popup-content"></div>
+    `;
+    
+    document.body.appendChild(overlay);
+    document.body.appendChild(popup);
+    
+    return overlay;
+}
+
+function closeScorePopup() {
+    const overlay = document.getElementById('score-popup-overlay');
+    const popup = document.getElementById('score-popup');
+    if (overlay) overlay.classList.remove('show');
+    if (popup) popup.classList.remove('show');
+}
+
 // Load videos when page loads
 loadVideos();
 </script>
+
+<style>
+.popup-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 9999;
+}
+
+.popup-overlay.show {
+    display: block;
+}
+
+.score-popup {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 10000;
+    max-width: 500px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.score-popup.show {
+    display: block;
+}
+
+.score-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.score-popup-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+}
+
+.score-popup-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.score-popup-close:hover {
+    color: #333;
+}
+
+.score-popup-content {
+    font-size: 14px;
+}
+
+.clickable-score:hover {
+    opacity: 0.8;
+}
+</style>
 
 </body>
 </html>
