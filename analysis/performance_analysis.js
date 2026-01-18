@@ -744,6 +744,25 @@ function generateStructuredOutputs(videos) {
     });
   });
 
+  // Calculate medians for per-video comparison (needed for createComparisonEntry)
+  const igViewsValues = processedVideos
+    .filter(v => v.igViews !== null && v.igViews !== undefined && v.igViews > 0)
+    .map(v => v.igViews);
+  const igLikesValues = processedVideos
+    .filter(v => v.igLikes !== null && v.igLikes !== undefined && v.igLikes > 0)
+    .map(v => v.igLikes);
+  const tiktokViewsValues = processedVideos
+    .filter(v => v.tiktokViews !== null && v.tiktokViews !== undefined && v.tiktokViews > 0)
+    .map(v => v.tiktokViews);
+  const tiktokLikesValues = processedVideos
+    .filter(v => v.tiktokLikes !== null && v.tiktokLikes !== undefined && v.tiktokLikes > 0)
+    .map(v => v.tiktokLikes);
+
+  const igViewsMedian = calculateMedian(igViewsValues);
+  const igLikesMedian = calculateMedian(igLikesValues);
+  const tiktokViewsMedian = calculateMedian(tiktokViewsValues);
+  const tiktokLikesMedian = calculateMedian(tiktokLikesValues);
+
   // Create per-video comparison entries - one for each platform the video has data on
   const perVideoComparison = [];
   

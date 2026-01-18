@@ -121,7 +121,7 @@ function createVideoCard(video) {
                                     ${video.shockValue}/100
                                 </span>
                                 <div id="shock-dropdown-shock-${video.s3Key}" class="score-dropdown" 
-                                     style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 1000; min-width: 280px; font-size: 12px;"
+                                     style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 10000; min-width: 280px; font-size: 12px;"
                                      onmouseenter="clearScoreDropdownTimeout()"
                                      onmouseleave="hideShockValueDropdown('shock-${video.s3Key}')"></div>
                             </span>
@@ -137,7 +137,7 @@ function createVideoCard(video) {
                                     ${video.successScore}/100
                                 </span>
                                 <div id="success-dropdown-success-${video.s3Key}" class="score-dropdown" 
-                                     style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 1000; min-width: 320px; font-size: 12px;"
+                                     style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 10000; min-width: 320px; font-size: 12px;"
                                      onmouseenter="clearScoreDropdownTimeout()"
                                      onmouseleave="hideSuccessScoreDropdown('success-${video.s3Key}')"></div>
                             </span>
@@ -640,7 +640,12 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
         }
     });
     
-    const hasComponents = tempoSpikes !== null || volumeSpikes !== null || unusualPatterns !== null;
+    // Handle string 'null' values passed from HTML
+    const tempoSpikesValue = (tempoSpikes === 'null' || tempoSpikes === null || tempoSpikes === undefined) ? null : parseFloat(tempoSpikes);
+    const volumeSpikesValue = (volumeSpikes === 'null' || volumeSpikes === null || volumeSpikes === undefined) ? null : parseFloat(volumeSpikes);
+    const unusualPatternsValue = (unusualPatterns === 'null' || unusualPatterns === null || unusualPatterns === undefined) ? null : parseFloat(unusualPatterns);
+    
+    const hasComponents = tempoSpikesValue !== null || volumeSpikesValue !== null || unusualPatternsValue !== null;
     
     if (hasComponents) {
         dropdown.innerHTML = `
@@ -650,15 +655,15 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
             <div style="margin-top: 15px;">
                 <div style="margin-bottom: 12px;">
                     <strong style="color: #333;">Tempo Spikes (Fills):</strong>
-                    <span style="float: right; font-weight: 600;">${tempoSpikes !== null ? tempoSpikes.toFixed(1) : 'N/A'}/100</span>
+                    <span style="float: right; font-weight: 600;">${tempoSpikesValue !== null ? tempoSpikesValue.toFixed(1) : 'N/A'}/100</span>
                 </div>
                 <div style="margin-bottom: 12px;">
                     <strong style="color: #333;">Volume Spikes (Accents):</strong>
-                    <span style="float: right; font-weight: 600;">${volumeSpikes !== null ? volumeSpikes.toFixed(1) : 'N/A'}/100</span>
+                    <span style="float: right; font-weight: 600;">${volumeSpikesValue !== null ? volumeSpikesValue.toFixed(1) : 'N/A'}/100</span>
                 </div>
                 <div style="margin-bottom: 12px;">
                     <strong style="color: #333;">Unusual Patterns:</strong>
-                    <span style="float: right; font-weight: 600;">${unusualPatterns !== null ? unusualPatterns.toFixed(1) : 'N/A'}/100</span>
+                    <span style="float: right; font-weight: 600;">${unusualPatternsValue !== null ? unusualPatternsValue.toFixed(1) : 'N/A'}/100</span>
                 </div>
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e9ecef;">
                     <strong style="color: #333; font-size: 16px;">Total Shock Value:</strong>
@@ -953,6 +958,16 @@ loadVideos();
 
 .clickable-score:hover {
     opacity: 0.8;
+}
+
+.score-dropdown {
+    z-index: 10000 !important;
+    position: absolute !important;
+}
+
+.hoverable-score-container {
+    z-index: 10001;
+    position: relative;
 }
 </style>
 
