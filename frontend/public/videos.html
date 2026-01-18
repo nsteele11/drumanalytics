@@ -633,7 +633,7 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     const dropdown = document.getElementById(`shock-dropdown-${id}`);
     if (!dropdown) return;
     
-    // Find the video card container (closest parent with class 'video-card')
+    // Find the video card and trigger BEFORE moving dropdown to body (closest won't work after move)
     const trigger = dropdown.closest('.hoverable-score-container');
     const videoCard = trigger ? trigger.closest('.video-card') : null;
     
@@ -683,7 +683,8 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
         dropdown.innerHTML = '<p>No detailed shock value components available for this video.</p>';
     }
     
-    // Move dropdown to body to avoid parent container clipping issues
+    // Move dropdown to body FIRST to avoid parent container clipping issues
+    // This must be done before getting cardRect/triggerRect
     if (dropdown.parentElement !== document.body) {
         document.body.appendChild(dropdown);
     }
@@ -694,6 +695,8 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     dropdown.style.visibility = 'hidden';
     dropdown.style.top = '0px';
     dropdown.style.left = '-9999px';
+    dropdown.style.zIndex = '2147483647'; // Set z-index early
+    dropdown.style.transform = 'translateZ(0)'; // Force new stacking context
     
     // Use offsetWidth which works even when visibility is hidden
     // Force a reflow to ensure dimensions are calculated
@@ -701,6 +704,7 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     
     // Now position it properly using actual measurements
     if (videoCard && trigger) {
+        // Get bounding rects AFTER moving to body (these are still valid)
         const cardRect = videoCard.getBoundingClientRect();
         const triggerRect = trigger.getBoundingClientRect();
         
@@ -727,13 +731,10 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
         // Apply final position and make visible
         dropdown.style.left = leftPosition + 'px';
         dropdown.style.top = (triggerRect.bottom + 4) + 'px';
-        dropdown.style.zIndex = '2147483647'; // Maximum z-index
         dropdown.style.visibility = 'visible';
-        dropdown.style.transform = 'translateZ(0)'; // Force new stacking context
     } else {
+        // Fallback if card/trigger not found
         dropdown.style.visibility = 'visible';
-        dropdown.style.zIndex = '2147483647'; // Maximum z-index
-        dropdown.style.transform = 'translateZ(0)'; // Force new stacking context
     }
 }
 
@@ -758,7 +759,7 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     const dropdown = document.getElementById(`success-dropdown-${id}`);
     if (!dropdown) return;
     
-    // Find the video card container (closest parent with class 'video-card')
+    // Find the video card and trigger BEFORE moving dropdown to body (closest won't work after move)
     const trigger = dropdown.closest('.hoverable-score-container');
     const videoCard = trigger ? trigger.closest('.video-card') : null;
     

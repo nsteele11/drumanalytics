@@ -640,20 +640,38 @@
                             <!-- Histograms Row -->
                             <div style="display: flex; gap: 30px;">
                                 <div style="flex: 1;">
-                                    <div style="margin-bottom: 20px;">
-                                        <label for="histogramFilter" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
-                                        <select id="histogramFilter" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
-                                            <option value="All Videos">All Videos</option>
-                                        </select>
+                                    <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                                        <div>
+                                            <label for="histogramFilter" style="font-weight: 600; margin-right: 10px; color: #495057;">Video Type:</label>
+                                            <select id="histogramFilter" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                                <option value="All Videos">All Videos</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="histogramPlatformFilter" style="font-weight: 600; margin-right: 10px; color: #495057;">Platform:</label>
+                                            <select id="histogramPlatformFilter" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                                <option value="Instagram" selected>Instagram</option>
+                                                <option value="TikTok">TikTok</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <div id="artistFollowersHistogram"></div>
                                 </div>
                                 <div style="flex: 1;">
-                                    <div style="margin-bottom: 20px;">
-                                        <label for="histogramFilterPopularity" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
-                                        <select id="histogramFilterPopularity" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
-                                            <option value="All Videos">All Videos</option>
-                                        </select>
+                                    <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                                        <div>
+                                            <label for="histogramFilterPopularity" style="font-weight: 600; margin-right: 10px; color: #495057;">Video Type:</label>
+                                            <select id="histogramFilterPopularity" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                                <option value="All Videos">All Videos</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="histogramPopularityPlatformFilter" style="font-weight: 600; margin-right: 10px; color: #495057;">Platform:</label>
+                                            <select id="histogramPopularityPlatformFilter" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                                <option value="Instagram" selected>Instagram</option>
+                                                <option value="TikTok">TikTok</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <div id="popularityHistogram"></div>
                                 </div>
@@ -1375,6 +1393,8 @@
                 histogramFilter.addEventListener('change', updateCharts);
                 scatterFilterTikTok.addEventListener('change', updateCharts);
                 histogramFilterPopularity.addEventListener('change', updateCharts);
+                document.getElementById('histogramPlatformFilter')?.addEventListener('change', updateCharts);
+                document.getElementById('histogramPopularityPlatformFilter')?.addEventListener('change', updateCharts);
                 filtersInitialized = true;
             }
         }
@@ -1397,6 +1417,8 @@
                 const histogramFilter = document.getElementById('histogramFilter')?.value || 'Solo Mix';
                 const scatterFilterTikTok = document.getElementById('scatterFilterTikTok')?.value || 'Solo Mix';
                 const histogramFilterPopularity = document.getElementById('histogramFilterPopularity')?.value || 'Solo Mix';
+                const histogramPlatformFilter = document.getElementById('histogramPlatformFilter')?.value || 'Instagram';
+                const histogramPopularityPlatformFilter = document.getElementById('histogramPopularityPlatformFilter')?.value || 'Instagram';
                 
                 // Filter videos for each chart
                 const scatterVideosIG = filterVideosByType(allChartingVideos, scatterFilterIG);
@@ -1406,8 +1428,8 @@
                 
                 // Display charts
                 displayArtistFollowersScatter(scatterVideosIG);
-                displayArtistFollowersHistogram(histogramVideos);
-                displayPopularityHistogram(histogramVideosPopularity);
+                displayArtistFollowersHistogram(histogramVideos, histogramPlatformFilter);
+                displayPopularityHistogram(histogramVideosPopularity, histogramPopularityPlatformFilter);
                 displayArtistFollowersScatterTikTok(scatterVideosTikTok);
             } catch (err) {
                 console.error('Error updating charts:', err);
@@ -1578,27 +1600,31 @@
             }
         }
 
-        function displayArtistFollowersHistogram(videos) {
+        function displayArtistFollowersHistogram(videos, platform = 'Instagram') {
             const container = document.getElementById('artistFollowersHistogram');
             
-            // Filter videos with artistFollowers and IG views data (video type already filtered by updateCharts)
-            const validVideos = videos.filter(v => 
-                v.artistFollowers !== null && 
-                v.artistFollowers !== undefined && 
-                v.igViews > 0
-            );
+            // Filter videos with artistFollowers and views data based on platform (video type already filtered by updateCharts)
+            const validVideos = videos.filter(v => {
+                if (v.artistFollowers === null || v.artistFollowers === undefined) return false;
+                if (platform === 'Instagram') {
+                    return v.igViews > 0;
+                } else {
+                    return v.tiktokViews > 0;
+                }
+            });
             
             if (validVideos.length === 0) {
                 const filterValue = document.getElementById('histogramFilter')?.value || 'Solo Mix';
-                container.innerHTML = `<div class="empty-state"><p>No ${filterValue === 'All Videos' ? '' : filterValue + ' '}videos with Instagram views data available for histogram.</p></div>`;
+                const platformText = platform === 'Instagram' ? 'Instagram' : 'TikTok';
+                container.innerHTML = `<div class="empty-state"><p>No ${filterValue === 'All Videos' ? '' : filterValue + ' '}videos with ${platformText} views data available for histogram.</p></div>`;
                 return;
             }
             
-            // Get data points with both followers and popularity
+            // Get data points with both followers and popularity, using the selected platform's views
             const dataPoints = validVideos.map(v => ({
                 followers: v.artistFollowers,
                 popularity: v.popularity,
-                views: v.igViews
+                views: platform === 'Instagram' ? v.igViews : v.tiktokViews
             }));
             
             // Create histogram bins for artist followers
@@ -1678,14 +1704,15 @@
             // Get current filter value for title
             const filterValue = document.getElementById('histogramFilter')?.value || 'Solo Mix';
             const filterText = filterValue === 'All Videos' ? '' : ` (${filterValue})`;
+            const platformText = platform === 'Instagram' ? 'Instagram' : 'TikTok';
             
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Average Instagram Views by Artist Followers${filterText}</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Average ${platformText} Views by Artist Followers${filterText}</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
                         <!-- Y-axis label -->
                         <text x="20" y="${startY / 2}" transform="rotate(-90, 20, ${startY / 2})" 
-                              style="font-size: 12px; fill: #666;">Average Instagram Views</text>
+                              style="font-size: 12px; fill: #666;">Average ${platformText} Views</text>
                         
                         <!-- X-axis -->
                         <line x1="${startX}" y1="${startY}" x2="${chartWidth - 30}" y2="${startY}" 
@@ -1809,14 +1836,15 @@
             // Get current filter value for title
             const filterValue = document.getElementById('histogramFilterPopularity')?.value || 'Solo Mix';
             const filterText = filterValue === 'All Videos' ? '' : ` (${filterValue})`;
+            const platformText = platform === 'Instagram' ? 'Instagram' : 'TikTok';
             
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Average Instagram Views by Song Popularity${filterText}</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Average ${platformText} Views by Song Popularity${filterText}</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
                         <!-- Y-axis label -->
                         <text x="20" y="${startY / 2}" transform="rotate(-90, 20, ${startY / 2})" 
-                              style="font-size: 12px; fill: #666;">Average Instagram Views</text>
+                              style="font-size: 12px; fill: #666;">Average ${platformText} Views</text>
                         
                         <!-- X-axis -->
                         <line x1="${startX}" y1="${startY}" x2="${chartWidth - 30}" y2="${startY}" 
