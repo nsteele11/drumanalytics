@@ -1424,9 +1424,19 @@
         
         function displayArtistFollowersScatter(videos) {
             const container = document.getElementById('artistFollowersScatter');
+            if (!container) {
+                console.error('artistFollowersScatter container not found');
+                return;
+            }
+            
+            if (!videos || !Array.isArray(videos)) {
+                container.innerHTML = '<div class="empty-state"><p>No video data available for Instagram scatter chart.</p></div>';
+                return;
+            }
             
             // Filter videos with both artistFollowers and IG views data
             const validVideos = videos.filter(v => 
+                v && 
                 v.artistFollowers !== null && 
                 v.artistFollowers !== undefined && 
                 v.igViews > 0
@@ -1447,9 +1457,9 @@
             
             // Find max for scaling (min is always 0)
             const minFollowers = 0;
-            const maxFollowers = Math.max(...dataPoints.map(d => d.followers));
+            const maxFollowers = dataPoints.length > 0 ? Math.max(...dataPoints.map(d => d.followers), 1) : 1;
             const minViews = 0;
-            const maxViews = Math.max(...dataPoints.map(d => d.views));
+            const maxViews = dataPoints.length > 0 ? Math.max(...dataPoints.map(d => d.views), 1) : 1;
             
             // Chart dimensions (adjusted for side-by-side layout)
             const chartWidth = 600;
@@ -1758,9 +1768,9 @@
             
             // Find max for scaling (min is always 0)
             const minFollowers = 0;
-            const maxFollowers = Math.max(...dataPoints.map(d => d.followers));
+            const maxFollowers = dataPoints.length > 0 ? Math.max(...dataPoints.map(d => d.followers), 1) : 1;
             const minViews = 0;
-            const maxViews = Math.max(...dataPoints.map(d => d.views));
+            const maxViews = dataPoints.length > 0 ? Math.max(...dataPoints.map(d => d.views), 1) : 1;
             
             // Chart dimensions (adjusted for side-by-side layout)
             const chartWidth = 600;

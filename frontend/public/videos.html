@@ -683,6 +683,11 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
         dropdown.innerHTML = '<p>No detailed shock value components available for this video.</p>';
     }
     
+    // Move dropdown to body to avoid parent container clipping issues
+    if (dropdown.parentElement !== document.body) {
+        document.body.appendChild(dropdown);
+    }
+    
     // Show dropdown temporarily to measure its width (but position it off-screen)
     dropdown.style.display = 'block';
     dropdown.style.position = 'fixed';
@@ -726,7 +731,7 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
         dropdown.style.visibility = 'visible';
     } else {
         dropdown.style.visibility = 'visible';
-        dropdown.style.zIndex = '100000';
+        dropdown.style.zIndex = '1000000';
     }
 }
 
@@ -882,22 +887,26 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     dropdown.style.display = 'block';
     dropdown.style.position = 'fixed';
     dropdown.style.visibility = 'hidden';
+    dropdown.style.top = '0px';
     dropdown.style.left = '-9999px';
+    
+    // Use offsetWidth which works even when visibility is hidden
+    // Force a reflow to ensure dimensions are calculated
+    void dropdown.offsetWidth;
     
     // Now position it properly using actual measurements
     if (videoCard && trigger) {
         const cardRect = videoCard.getBoundingClientRect();
         const triggerRect = trigger.getBoundingClientRect();
-        const dropdownRect = dropdown.getBoundingClientRect();
         
         const viewportWidth = window.innerWidth;
         const padding = 10; // Padding from viewport edge
         
+        // Get actual dropdown width using offsetWidth (works even when hidden)
+        const dropdownWidth = dropdown.offsetWidth || 320; // fallback to min-width
+        
         // Start with left edge aligned to card
         let leftPosition = cardRect.left;
-        
-        // Get actual dropdown width
-        const dropdownWidth = dropdownRect.width || 320; // fallback to min-width
         
         // Check if dropdown would overflow the right edge of viewport
         if (leftPosition + dropdownWidth > viewportWidth - padding) {
