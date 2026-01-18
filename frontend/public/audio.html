@@ -617,6 +617,7 @@
                         <div id="chartingContent">
                             <div id="artistFollowersScatter"></div>
                             <div id="artistFollowersHistogram"></div>
+                            <div id="artistFollowersScatterTikTok"></div>
                         </div>
                     </div>
                 </div>
@@ -1269,20 +1270,27 @@
                 }
                 const videos = await response.json();
                 
-                // Display scatter chart
+                // Display scatter chart (Instagram)
                 displayArtistFollowersScatter(videos);
                 
-                // Display histogram
+                // Display histogram (Instagram, Solo Mix only)
                 displayArtistFollowersHistogram(videos);
+                
+                // Display scatter chart (TikTok)
+                displayArtistFollowersScatterTikTok(videos);
             } catch (err) {
                 console.error('Error loading charting data:', err);
                 const scatterContainer = document.getElementById('artistFollowersScatter');
                 const histogramContainer = document.getElementById('artistFollowersHistogram');
+                const scatterTikTokContainer = document.getElementById('artistFollowersScatterTikTok');
                 if (scatterContainer) {
-                    scatterContainer.innerHTML = '<div class="empty-state"><p>Error loading scatter chart data.</p></div>';
+                    scatterContainer.innerHTML = '<div class="empty-state"><p>Error loading Instagram scatter chart data.</p></div>';
                 }
                 if (histogramContainer) {
                     histogramContainer.innerHTML = '<div class="empty-state"><p>Error loading histogram chart data.</p></div>';
+                }
+                if (scatterTikTokContainer) {
+                    scatterTikTokContainer.innerHTML = '<div class="empty-state"><p>Error loading TikTok scatter chart data.</p></div>';
                 }
             }
         }
@@ -1290,22 +1298,22 @@
         function displayArtistFollowersScatter(videos) {
             const container = document.getElementById('artistFollowersScatter');
             
-            // Filter videos with both artistFollowers and views data
+            // Filter videos with both artistFollowers and IG views data
             const validVideos = videos.filter(v => 
                 v.artistFollowers !== null && 
                 v.artistFollowers !== undefined && 
-                (v.igViews > 0 || v.tiktokViews > 0)
+                v.igViews > 0
             );
             
             if (validVideos.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No data available for scatter chart.</p></div>';
+                container.innerHTML = '<div class="empty-state"><p>No data available for Instagram scatter chart.</p></div>';
                 return;
             }
             
-            // Get data points (followers on x-axis, views on y-axis)
+            // Get data points (followers on x-axis, IG views on y-axis)
             const dataPoints = validVideos.map(v => ({
                 followers: v.artistFollowers,
-                views: v.igViews || v.tiktokViews || 0,
+                views: v.igViews,
                 trackName: v.trackName || 'Unknown',
                 artistName: v.artistName || 'Unknown'
             }));
@@ -1340,7 +1348,7 @@
             // Create scatter plot
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Views (Scatter Plot)</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Instagram Views (Scatter Plot)</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
                         <!-- Y-axis label -->
                         <text x="${marginLeft / 2}" y="${marginTop + plotHeight / 2}" transform="rotate(-90, ${marginLeft / 2}, ${marginTop + plotHeight / 2})" 
@@ -1432,22 +1440,23 @@
         function displayArtistFollowersHistogram(videos) {
             const container = document.getElementById('artistFollowersHistogram');
             
-            // Filter videos with both artistFollowers and views data
+            // Filter videos: Solo Mix type, with artistFollowers and IG views data
             const validVideos = videos.filter(v => 
+                v.videoType === 'Solo Mix' &&
                 v.artistFollowers !== null && 
                 v.artistFollowers !== undefined && 
-                (v.igViews > 0 || v.tiktokViews > 0)
+                v.igViews > 0
             );
             
             if (validVideos.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No data available for histogram.</p></div>';
+                container.innerHTML = '<div class="empty-state"><p>No Solo Mix videos with Instagram views data available for histogram.</p></div>';
                 return;
             }
             
-            // Get views (prefer IG, fallback to TikTok)
+            // Get views (IG only, Solo Mix only)
             const dataPoints = validVideos.map(v => ({
                 followers: v.artistFollowers,
-                views: v.igViews || v.tiktokViews || 0
+                views: v.igViews
             }));
             
             // Create histogram bins for artist followers
@@ -1495,11 +1504,11 @@
             
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Average Views</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs Average Instagram Views (Solo Mix Only)</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
                         <!-- Y-axis label -->
                         <text x="20" y="${startY / 2}" transform="rotate(-90, 20, ${startY / 2})" 
-                              style="font-size: 12px; fill: #666;">Average Views</text>
+                              style="font-size: 12px; fill: #666;">Average Instagram Views</text>
                         
                         <!-- X-axis -->
                         <line x1="${startX}" y1="${startY}" x2="${chartWidth - 50}" y2="${startY}" 
@@ -1550,6 +1559,121 @@
             });
             
             svg += `
+                    </svg>
+                </div>
+            `;
+            
+            container.innerHTML = svg;
+        }
+
+        function displayArtistFollowersScatterTikTok(videos) {
+            const container = document.getElementById('artistFollowersScatterTikTok');
+            
+            // Filter videos with both artistFollowers and TikTok views data
+            const validVideos = videos.filter(v => 
+                v.artistFollowers !== null && 
+                v.artistFollowers !== undefined && 
+                v.tiktokViews > 0
+            );
+            
+            if (validVideos.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No data available for TikTok scatter chart.</p></div>';
+                return;
+            }
+            
+            // Get data points (followers on x-axis, TikTok views on y-axis)
+            const dataPoints = validVideos.map(v => ({
+                followers: v.artistFollowers,
+                views: v.tiktokViews,
+                trackName: v.trackName || 'Unknown',
+                artistName: v.artistName || 'Unknown'
+            }));
+            
+            // Find min/max for scaling
+            const minFollowers = Math.min(...dataPoints.map(d => d.followers));
+            const maxFollowers = Math.max(...dataPoints.map(d => d.followers));
+            const minViews = Math.min(...dataPoints.map(d => d.views));
+            const maxViews = Math.max(...dataPoints.map(d => d.views));
+            
+            // Chart dimensions
+            const chartWidth = 800;
+            const chartHeight = 400;
+            const marginLeft = 80;
+            const marginRight = 50;
+            const marginTop = 30;
+            const marginBottom = 60;
+            const plotWidth = chartWidth - marginLeft - marginRight;
+            const plotHeight = chartHeight - marginTop - marginBottom;
+            
+            // Scale functions
+            const scaleX = (followers) => {
+                if (maxFollowers === minFollowers) return plotWidth / 2;
+                return ((followers - minFollowers) / (maxFollowers - minFollowers)) * plotWidth;
+            };
+            
+            const scaleY = (views) => {
+                if (maxViews === minViews) return plotHeight / 2;
+                return plotHeight - ((views - minViews) / (maxViews - minViews)) * plotHeight;
+            };
+            
+            // Create scatter plot
+            let svg = `
+                <div style="margin-top: 15px;">
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Artist Followers vs TikTok Views (Scatter Plot)</h3>
+                    <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
+                        <!-- Y-axis label -->
+                        <text x="${marginLeft / 2}" y="${marginTop + plotHeight / 2}" transform="rotate(-90, ${marginLeft / 2}, ${marginTop + plotHeight / 2})" 
+                              style="font-size: 12px; fill: #666; text-anchor: middle;">Views</text>
+                        
+                        <!-- X-axis label -->
+                        <text x="${marginLeft + plotWidth / 2}" y="${chartHeight - 10}" 
+                              style="font-size: 12px; fill: #666; text-anchor: middle;">Artist Followers</text>
+                        
+                        <!-- X-axis -->
+                        <line x1="${marginLeft}" y1="${marginTop + plotHeight}" 
+                              x2="${marginLeft + plotWidth}" y2="${marginTop + plotHeight}" 
+                              style="stroke: #333; stroke-width: 2;" />
+                        
+                        <!-- Y-axis -->
+                        <line x1="${marginLeft}" y1="${marginTop}" 
+                              x2="${marginLeft}" y2="${marginTop + plotHeight}" 
+                              style="stroke: #333; stroke-width: 2;" />
+                        
+                        <!-- X-axis ticks and labels -->
+                        ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
+                            const x = marginLeft + (ratio * plotWidth);
+                            const value = Math.round(minFollowers + (maxFollowers - minFollowers) * ratio);
+                            return `
+                                <line x1="${x}" y1="${marginTop + plotHeight}" x2="${x}" y2="${marginTop + plotHeight + 5}" 
+                                      style="stroke: #666; stroke-width: 1;" />
+                                <text x="${x}" y="${marginTop + plotHeight + 20}" text-anchor="middle" 
+                                      style="font-size: 11px; fill: #666;">${value.toLocaleString()}</text>
+                            `;
+                        }).join('')}
+                        
+                        <!-- Y-axis ticks and labels -->
+                        ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
+                            const y = marginTop + plotHeight - (ratio * plotHeight);
+                            const value = Math.round(minViews + (maxViews - minViews) * ratio);
+                            return `
+                                <line x1="${marginLeft - 5}" y1="${y}" x2="${marginLeft}" y2="${y}" 
+                                      style="stroke: #666; stroke-width: 1;" />
+                                <text x="${marginLeft - 10}" y="${y + 4}" text-anchor="end" 
+                                      style="font-size: 11px; fill: #666;">${value.toLocaleString()}</text>
+                            `;
+                        }).join('')}
+                        
+                        <!-- Data points -->
+                        ${dataPoints.map((point, index) => {
+                            const x = marginLeft + scaleX(point.followers);
+                            const y = marginTop + scaleY(point.views);
+                            return `
+                                <circle cx="${x}" cy="${y}" r="4" 
+                                        style="fill: #007bff; stroke: #0056b3; stroke-width: 1; cursor: pointer;"
+                                        onmouseover="showScatterTooltip(event, '${escapeHtml(point.trackName)}', '${escapeHtml(point.artistName)}', ${point.followers}, ${point.views})"
+                                        onmouseout="hideScatterTooltip()" />
+                            `;
+                        }).join('')}
                     </svg>
                 </div>
             `;

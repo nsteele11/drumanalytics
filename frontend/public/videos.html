@@ -121,7 +121,7 @@ function createVideoCard(video) {
                                     ${video.shockValue}/100
                                 </span>
                                 <div id="shock-dropdown-shock-${video.s3Key}" class="score-dropdown" 
-                                     style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 10000; min-width: 280px; font-size: 12px;"
+                                     style="display: none; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 100000; min-width: 280px; font-size: 12px;"
                                      onmouseenter="clearScoreDropdownTimeout()"
                                      onmouseleave="hideShockValueDropdown('shock-${video.s3Key}')"></div>
                             </span>
@@ -137,7 +137,7 @@ function createVideoCard(video) {
                                     ${video.successScore}/100
                                 </span>
                                 <div id="success-dropdown-success-${video.s3Key}" class="score-dropdown" 
-                                     style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 10000; min-width: 320px; font-size: 12px;"
+                                     style="display: none; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 100000; min-width: 320px; font-size: 12px;"
                                      onmouseenter="clearScoreDropdownTimeout()"
                                      onmouseleave="hideSuccessScoreDropdown('success-${video.s3Key}')"></div>
                             </span>
@@ -633,6 +633,15 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     const dropdown = document.getElementById(`shock-dropdown-${id}`);
     if (!dropdown) return;
     
+    // Get the trigger element to calculate position
+    const trigger = dropdown.previousElementSibling;
+    if (trigger) {
+        const rect = trigger.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+    }
+    
     // Close all other score dropdowns
     document.querySelectorAll('.score-dropdown').forEach(dd => {
         if (dd.id !== `shock-dropdown-${id}` && dd.id !== `success-dropdown-${id}`) {
@@ -679,6 +688,7 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     }
     
     dropdown.style.display = 'block';
+    dropdown.style.zIndex = '100000';
 }
 
 function hideShockValueDropdown(id) {
@@ -701,6 +711,15 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     
     const dropdown = document.getElementById(`success-dropdown-${id}`);
     if (!dropdown) return;
+    
+    // Get the trigger element to calculate position
+    const trigger = dropdown.previousElementSibling;
+    if (trigger) {
+        const rect = trigger.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+    }
     
     // Close all other score dropdowns
     document.querySelectorAll('.score-dropdown').forEach(dd => {
@@ -826,6 +845,7 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     `;
     
     dropdown.style.display = 'block';
+    dropdown.style.zIndex = '100000';
 }
 
 function hideSuccessScoreDropdown(id) {
@@ -961,12 +981,11 @@ loadVideos();
 }
 
 .score-dropdown {
-    z-index: 10000 !important;
-    position: absolute !important;
+    z-index: 100000 !important;
+    position: fixed !important;
 }
 
 .hoverable-score-container {
-    z-index: 10001;
     position: relative;
 }
 </style>
