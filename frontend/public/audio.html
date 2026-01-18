@@ -511,22 +511,22 @@
             <div id="analysisContent" style="display: none;">
                 <!-- Metadata Info -->
                 <div class="analysis-section collapsible-section">
-                    <div class="collapsible-header expanded" onclick="toggleSection(this)">
+                    <div class="collapsible-header" onclick="toggleSection(this)">
                         <h2 style="margin: 0;">Analysis Overview</h2>
                         <span class="toggle-icon">▼</span>
                     </div>
-                    <div class="collapsible-content expanded">
+                    <div class="collapsible-content">
                         <div id="metadataInfo" class="metadata-info"></div>
                     </div>
                 </div>
 
                 <!-- Early Signal Summary -->
                 <div class="analysis-section collapsible-section">
-                    <div class="collapsible-header expanded" onclick="toggleSection(this)">
+                    <div class="collapsible-header" onclick="toggleSection(this)">
                         <h2 style="margin: 0;">Early Signal Summary</h2>
                         <span class="toggle-icon">▼</span>
                     </div>
-                    <div class="collapsible-content expanded">
+                    <div class="collapsible-content">
                         <p class="section-description">
                             Features showing directional signals (lift > 1.0 = positive). <em>Early signal only, not statistically validated.</em>
                         </p>
@@ -536,11 +536,11 @@
 
                 <!-- What Seems to Be Working -->
                 <div class="analysis-section collapsible-section">
-                    <div class="collapsible-header expanded" onclick="toggleSection(this)">
+                    <div class="collapsible-header" onclick="toggleSection(this)">
                         <h2 style="margin: 0;">What Seems to Be Working</h2>
                         <span class="toggle-icon">▼</span>
                     </div>
-                    <div class="collapsible-content expanded">
+                    <div class="collapsible-content">
                         <p class="section-description">
                             Top-performing patterns ranked by lift and consistency with top 30% performers.
                         </p>
@@ -550,11 +550,11 @@
 
                 <!-- IG Per-Video Comparison -->
                 <div class="analysis-section collapsible-section">
-                    <div class="collapsible-header expanded" onclick="toggleSection(this)">
+                    <div class="collapsible-header" onclick="toggleSection(this)">
                         <h2 style="margin: 0;">IG Per-Video Comparison</h2>
                         <span class="toggle-icon">▼</span>
                     </div>
-                    <div class="collapsible-content expanded">
+                    <div class="collapsible-content">
                         <p class="section-description">
                             Individual Instagram video performance with metadata overlap against top 30% performers.
                         </p>
@@ -615,6 +615,7 @@
                             Visual analysis of video performance metrics.
                         </p>
                         <div id="chartingContent">
+                            <div id="artistFollowersScatter"></div>
                             <div id="artistFollowersHistogram"></div>
                         </div>
                     </div>
@@ -680,8 +681,15 @@
             
             // Display per-video comparison
             // Split into IG and TikTok sections
-            const igVideos = (data.per_video_comparison || []).filter(v => v.platform && v.platform.toLowerCase() === 'instagram');
-            const tiktokVideos = (data.per_video_comparison || []).filter(v => v.platform && v.platform.toLowerCase() === 'tiktok');
+            // Note: Videos with both platforms will appear in IG section (as per analysis logic)
+            const igVideos = (data.per_video_comparison || []).filter(v => {
+                const platform = (v.platform || '').toLowerCase();
+                return platform === 'instagram';
+            });
+            const tiktokVideos = (data.per_video_comparison || []).filter(v => {
+                const platform = (v.platform || '').toLowerCase();
+                return platform === 'tiktok';
+            });
             displayPerVideoComparisonIG(igVideos);
             displayPerVideoComparisonTikTok(tiktokVideos);
             
@@ -1264,17 +1272,18 @@
                 // Display scatter chart
                 displayArtistFollowersScatter(videos);
                 
-                // Display scatter chart
-                displayArtistFollowersScatter(videos);
-                
                 // Display histogram
                 displayArtistFollowersHistogram(videos);
             } catch (err) {
                 console.error('Error loading charting data:', err);
-                document.getElementById('artistFollowersScatter').innerHTML = 
-                    '<div class="empty-state"><p>Error loading chart data.</p></div>';
-                document.getElementById('artistFollowersHistogram').innerHTML = 
-                    '<div class="empty-state"><p>Error loading chart data.</p></div>';
+                const scatterContainer = document.getElementById('artistFollowersScatter');
+                const histogramContainer = document.getElementById('artistFollowersHistogram');
+                if (scatterContainer) {
+                    scatterContainer.innerHTML = '<div class="empty-state"><p>Error loading scatter chart data.</p></div>';
+                }
+                if (histogramContainer) {
+                    histogramContainer.innerHTML = '<div class="empty-state"><p>Error loading histogram chart data.</p></div>';
+                }
             }
         }
 

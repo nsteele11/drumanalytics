@@ -744,43 +744,98 @@ function generateStructuredOutputs(videos) {
     });
   });
 
-  const perVideoComparison = processedVideos.map(video => {
+  // Create per-video comparison entries - one for each platform the video has data on
+  const perVideoComparison = [];
+  
+  processedVideos.forEach(video => {
     const videoClassifications = classifyMetadata(video);
-    const overlapTraits = [];
-    const uniqueTraits = [];
+    
+    // Helper function to create comparison entry for a platform
+    const createComparisonEntry = (platform, views, likes, viewsMedian, likesMedian, engagementProxy, performanceRank, rankingBreakdown) => {
+      const overlapTraits = [];
+      const uniqueTraits = [];
 
-    Object.entries(videoClassifications).forEach(([feature, value]) => {
-      if (value === null || value === undefined) return;
-      // Skip internal classification keys (genre:xxx, hashtag:xxx)
-      if (feature.startsWith('genre:') || feature.startsWith('ig_hashtag:') || feature.startsWith('tiktok_hashtag:')) {
-        return;
-      }
-      const key = `${feature}:${value}`;
-      if (topVideoClassifications.has(key)) {
-        overlapTraits.push({ feature, value });
-      } else {
-        uniqueTraits.push({ feature, value });
-      }
-    });
+      Object.entries(videoClassifications).forEach(([feature, value]) => {
+        if (value === null || value === undefined) return;
+        // Skip internal classification keys (genre:xxx, hashtag:xxx)
+        if (feature.startsWith('genre:') || feature.startsWith('ig_hashtag:') || feature.startsWith('tiktok_hashtag:')) {
+          return;
+        }
+        const key = `${feature}:${value}`;
+        if (topVideoClassifications.has(key)) {
+          overlapTraits.push({ feature, value });
+        } else {
+          uniqueTraits.push({ feature, value });
+        }
+      });
 
-    return {
-      s3Key: video.s3Key,
-      trackName: video.trackName || 'Unknown',
-      artistName: video.artistName || 'Unknown',
-      platform: video.platform || 'unknown',
-      views: video.views || 0,
-      likes: video.likes || 0,
-      engagement_proxy: Math.round((video.engagement_proxy || 0) * 1000) / 1000,
-      performance_rank: Math.round((video.performance_rank || 0) * 100) / 100,
-      ranking_breakdown: video.ranking_breakdown || null,
-      metadata_overlap_with_top_30_percent: {
-        overlap_count: overlapTraits.length,
-        traits: overlapTraits
-      },
-      unique_traits: uniqueTraits
+      return {
+        s3Key: video.s3Key,
+        trackName: video.trackName || 'Unknown',
+        artistName: video.artistName || 'Unknown',
+        platform: platform,
+        views: views || 0,
+        likes: likes || 0,
+        engagement_proxy: Math.round((engagementProxy || 0) * 1000) / 1000,
+        performance_rank: Math.round((performanceRank || 0) * 100) / 100,
+        ranking_breakdown: rankingBreakdown || null,
+        metadata_overlap_with_top_30_percent: {
+          overlap_count: overlapTraits.length,
+          traits: overlapTraits
+        },
+        unique_traits: uniqueTraits
+      };
     };
-  })
-  .sort((a, b) => a.performance_rank - b.performance_rank);
+
+    // Calculate metrics for IG if available
+    if (video.igViews !== null && video.igViews !== undefined && video.igViews > 0) {
+      const igViews = video.igViews;
+      const igLikes = video.igLikes || 0;
+      const igEngagementProxy = igViews > 0 ? igLikes / igViews : 0;
+      
+      // Use existing performance_rank (calculated based on preferred platform)
+      // For videos with both platforms, this will be based on IG metrics
+      const igPerformanceRank = video.performance_rank || 0;
+      const igRankingBreakdown = video.platform === 'instagram' ? video.ranking_breakdown : null;
+      
+      perVideoComparison.push(createComparisonEntry(
+        'instagram',
+        igViews,
+        igLikes,
+        igViewsMedian,
+        igLikesMedian,
+        igEngagementProxy,
+        igPerformanceRank,
+        igRankingBreakdown
+      ));
+    }
+
+    // Calculate metrics for TikTok if available
+    if (video.tiktokViews !== null && video.tiktokViews !== undefined && video.tiktokViews > 0) {
+      const tiktokViews = video.tiktokViews;
+      const tiktokLikes = video.tiktokLikes || 0;
+      const tiktokEngagementProxy = tiktokViews > 0 ? tiktokLikes / tiktokViews : 0;
+      
+      // Use existing performance_rank (for videos with only TikTok, this will be based on TikTok metrics)
+      // For videos with both platforms, this will be based on IG metrics (since IG is preferred)
+      const tiktokPerformanceRank = video.performance_rank || 0;
+      const tiktokRankingBreakdown = video.platform === 'tiktok' ? video.ranking_breakdown : null;
+      
+      perVideoComparison.push(createComparisonEntry(
+        'tiktok',
+        tiktokViews,
+        tiktokLikes,
+        tiktokViewsMedian,
+        tiktokLikesMedian,
+        tiktokEngagementProxy,
+        tiktokPerformanceRank,
+        tiktokRankingBreakdown
+      ));
+    }
+  });
+  
+  // Sort by performance rank
+  perVideoComparison.sort((a, b) => a.performance_rank - b.performance_rank);
 
   return {
     analysis_metadata: {

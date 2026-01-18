@@ -670,8 +670,8 @@ async function updateComparisonTable() {
 
         // Find matching video
         const matchingVideo = findMatchingVideo(metadata);
-        const successScore = matchingVideo?.success_score;
-        const successRank = matchingVideo?.success_rank;
+        const successScore = matchingVideo?.successScore;
+        const successRank = matchingVideo?.successRank;
 
         // Format success score and rank
         let successScoreHtml = '—';
@@ -837,8 +837,8 @@ async function loadGenreData(genre) {
                     artist: { name: track.artist || '' }
                 };
                 const matchingVideo = findMatchingVideo(trackMetadata);
-                const successScore = matchingVideo?.success_score;
-                const successRank = matchingVideo?.success_rank;
+                const successScore = matchingVideo?.successScore;
+                const successRank = matchingVideo?.successRank;
 
                 // Format success score and rank
                 let successScoreHtml = '—';
@@ -972,8 +972,8 @@ async function loadArtistPopularTracks(artistId) {
                     artist: { name: track.artist || '' }
                 };
                 const matchingVideo = findMatchingVideo(trackMetadata);
-                const successScore = matchingVideo?.success_score;
-                const successRank = matchingVideo?.success_rank;
+                const successScore = matchingVideo?.successScore;
+                const successRank = matchingVideo?.successRank;
 
                 // Format success score and rank
                 let successScoreHtml = '—';

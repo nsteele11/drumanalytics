@@ -111,8 +111,38 @@ function createVideoCard(video) {
                     ${video.genres && video.genres.length > 0 ? `<div class="video-meta-item"><strong>Genres:</strong> ${escapeHtml(video.genres.join(', '))}</div>` : ''}
                     ${video.duration ? `<div class="video-meta-item"><strong>Duration:</strong> ${formatDuration(video.duration)}</div>` : ''}
                     ${video.bpm ? `<div class="video-meta-item"><strong>BPM:</strong> ${video.bpm}</div>` : ''}
-                    ${video.shockValue !== null ? `<div class="video-meta-item"><strong>Shock Value:</strong> <span class="clickable-score" style="font-weight: bold; color: ${getShockValueColorWithTop20(video.shockValue, allVideosForShockValue)}; cursor: pointer; text-decoration: underline;" onclick="showShockValuePopup(${video.shockValue}, ${video.tempoSpikes !== null ? video.tempoSpikes : 'null'}, ${video.volumeSpikes !== null ? video.volumeSpikes : 'null'}, ${video.unusualPatterns !== null ? video.unusualPatterns : 'null'})">${video.shockValue}/100</span></div>` : ''}
-                    ${video.successScore !== null && video.successScore !== undefined ? `<div class="video-meta-item"><strong>Video Success Score:</strong> <span class="clickable-score" style="font-weight: bold; color: ${getSuccessScoreColor(video.successScore)}; cursor: pointer; text-decoration: underline;" onclick="showSuccessScorePopup(${video.igViews || 0}, ${video.igLikes || 0}, ${video.tiktokViews || 0}, ${video.tiktokLikes || 0}, ${video.successScore}, ${JSON.stringify(allVideosForShockValue).replace(/"/g, '&quot;')})">${video.successScore}/100</span></div>` : ''}
+                    ${video.shockValue !== null ? `
+                        <div class="video-meta-item">
+                            <strong>Shock Value:</strong> 
+                            <span class="hoverable-score-container" style="position: relative; display: inline-block;">
+                                <span class="clickable-score" style="font-weight: bold; color: ${getShockValueColorWithTop20(video.shockValue, allVideosForShockValue)}; cursor: pointer; text-decoration: underline;" 
+                                      onmouseenter="showShockValueDropdown('shock-${video.s3Key}', ${video.shockValue}, ${video.tempoSpikes !== null ? video.tempoSpikes : 'null'}, ${video.volumeSpikes !== null ? video.volumeSpikes : 'null'}, ${video.unusualPatterns !== null ? video.unusualPatterns : 'null'})"
+                                      onmouseleave="hideShockValueDropdown('shock-${video.s3Key}')">
+                                    ${video.shockValue}/100
+                                </span>
+                                <div id="shock-dropdown-shock-${video.s3Key}" class="score-dropdown" 
+                                     style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 1000; min-width: 280px; font-size: 12px;"
+                                     onmouseenter="clearScoreDropdownTimeout()"
+                                     onmouseleave="hideShockValueDropdown('shock-${video.s3Key}')"></div>
+                            </span>
+                        </div>
+                    ` : ''}
+                    ${video.successScore !== null && video.successScore !== undefined ? `
+                        <div class="video-meta-item">
+                            <strong>Video Success Score:</strong> 
+                            <span class="hoverable-score-container" style="position: relative; display: inline-block;">
+                                <span class="clickable-score" style="font-weight: bold; color: ${getSuccessScoreColor(video.successScore)}; cursor: pointer; text-decoration: underline;" 
+                                      onmouseenter="showSuccessScoreDropdown('success-${video.s3Key}', ${video.igViews || 0}, ${video.igLikes || 0}, ${video.tiktokViews || 0}, ${video.tiktokLikes || 0}, ${video.successScore})"
+                                      onmouseleave="hideSuccessScoreDropdown('success-${video.s3Key}')">
+                                    ${video.successScore}/100
+                                </span>
+                                <div id="success-dropdown-success-${video.s3Key}" class="score-dropdown" 
+                                     style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 1000; min-width: 320px; font-size: 12px;"
+                                     onmouseenter="clearScoreDropdownTimeout()"
+                                     onmouseleave="hideSuccessScoreDropdown('success-${video.s3Key}')"></div>
+                            </span>
+                        </div>
+                    ` : ''}
                     ${video.successRank !== null && video.successRank !== undefined ? `<div class="video-meta-item"><strong>Video Rank:</strong> <span style="font-weight: bold; color: ${getSuccessRankColor(video.successRank)};">#${video.successRank}</span></div>` : ''}
                     
                     <!-- Social Media Metrics Section -->
@@ -590,16 +620,30 @@ async function openHashtagSuggestionsModal(video) {
     }
 }
 
-// Popup functions for shock value and success score
-function showShockValuePopup(shockValue, tempoSpikes, volumeSpikes, unusualPatterns) {
-    const overlay = document.getElementById('score-popup-overlay') || createScorePopupElements();
-    const popup = document.getElementById('score-popup');
+// Hover dropdown functions for shock value and success score
+let scoreDropdownTimeout = null;
+
+function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusualPatterns) {
+    // Clear any pending hide timeout
+    if (scoreDropdownTimeout) {
+        clearTimeout(scoreDropdownTimeout);
+        scoreDropdownTimeout = null;
+    }
     
-    const content = popup.querySelector('.score-popup-content');
+    const dropdown = document.getElementById(`shock-dropdown-${id}`);
+    if (!dropdown) return;
+    
+    // Close all other score dropdowns
+    document.querySelectorAll('.score-dropdown').forEach(dd => {
+        if (dd.id !== `shock-dropdown-${id}` && dd.id !== `success-dropdown-${id}`) {
+            dd.style.display = 'none';
+        }
+    });
+    
     const hasComponents = tempoSpikes !== null || volumeSpikes !== null || unusualPatterns !== null;
     
     if (hasComponents) {
-        content.innerHTML = `
+        dropdown.innerHTML = `
             <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
                 <strong>Shock Value Breakdown</strong>
             </div>
@@ -626,24 +670,45 @@ function showShockValuePopup(shockValue, tempoSpikes, volumeSpikes, unusualPatte
             </div>
         `;
     } else {
-        content.innerHTML = '<p>No detailed shock value components available for this video.</p>';
+        dropdown.innerHTML = '<p>No detailed shock value components available for this video.</p>';
     }
     
-    overlay.classList.add('show');
-    popup.classList.add('show');
+    dropdown.style.display = 'block';
 }
 
-function showSuccessScorePopup(igViews, igLikes, tiktokViews, tiktokLikes, successScore) {
-    const overlay = document.getElementById('score-popup-overlay') || createScorePopupElements();
-    const popup = document.getElementById('score-popup');
+function hideShockValueDropdown(id) {
+    // Small delay to allow moving mouse to dropdown
+    scoreDropdownTimeout = setTimeout(() => {
+        const dropdown = document.getElementById(`shock-dropdown-${id}`);
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+        scoreDropdownTimeout = null;
+    }, 200);
+}
+
+function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes, successScore) {
+    // Clear any pending hide timeout
+    if (scoreDropdownTimeout) {
+        clearTimeout(scoreDropdownTimeout);
+        scoreDropdownTimeout = null;
+    }
     
-    const content = popup.querySelector('.score-popup-content');
+    const dropdown = document.getElementById(`success-dropdown-${id}`);
+    if (!dropdown) return;
+    
+    // Close all other score dropdowns
+    document.querySelectorAll('.score-dropdown').forEach(dd => {
+        if (dd.id !== `success-dropdown-${id}` && dd.id !== `shock-dropdown-${id}`) {
+            dd.style.display = 'none';
+        }
+    });
     
     // Calculate medians for normalization display
     const igViewsValues = allVideosForShockValue.filter(v => v.igViews > 0).map(v => v.igViews);
-    const igLikesValues = allVideosForShockValue.filter(v => v.igLikes > 0).map(v => v.igLikes);
+    const igLikesValues = allVideosForShockValue.filter(v => v.igLikes !== null && v.igLikes >= 0).map(v => v.igLikes);
     const tiktokViewsValues = allVideosForShockValue.filter(v => v.tiktokViews > 0).map(v => v.tiktokViews);
-    const tiktokLikesValues = allVideosForShockValue.filter(v => v.tiktokLikes > 0).map(v => v.tiktokLikes);
+    const tiktokLikesValues = allVideosForShockValue.filter(v => v.tiktokLikes !== null && v.tiktokLikes >= 0).map(v => v.tiktokLikes);
     
     const calculateMedian = (values) => {
         if (values.length === 0) return 0;
@@ -707,14 +772,12 @@ function showSuccessScorePopup(igViews, igLikes, tiktokViews, tiktokLikes, succe
         metricLabels.push({ name: 'TikTok Engagement', ratio: ratio, value: engagementRate, median: tiktokEngagementMedian });
     }
     
-    const hasBothPlatforms = (igViews > 0) && (tiktokViews > 0);
-    
     // Calculate average ratio for display
     const avgRatio = metrics.length > 0 
         ? metrics.reduce((sum, ratio) => sum + ratio, 0) / metrics.length 
         : 0;
     
-    content.innerHTML = `
+    dropdown.innerHTML = `
         <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
             <strong>Success Score Breakdown</strong>
         </div>
@@ -757,8 +820,25 @@ function showSuccessScorePopup(igViews, igLikes, tiktokViews, tiktokLikes, succe
         </div>
     `;
     
-    overlay.classList.add('show');
-    popup.classList.add('show');
+    dropdown.style.display = 'block';
+}
+
+function hideSuccessScoreDropdown(id) {
+    // Small delay to allow moving mouse to dropdown
+    scoreDropdownTimeout = setTimeout(() => {
+        const dropdown = document.getElementById(`success-dropdown-${id}`);
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+        scoreDropdownTimeout = null;
+    }, 200);
+}
+
+function clearScoreDropdownTimeout() {
+    if (scoreDropdownTimeout) {
+        clearTimeout(scoreDropdownTimeout);
+        scoreDropdownTimeout = null;
+    }
 }
 
 function createScorePopupElements() {
