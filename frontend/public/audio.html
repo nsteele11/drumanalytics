@@ -1743,6 +1743,137 @@
             container.innerHTML = svg;
         }
 
+        function displayPopularityHistogram(videos) {
+            const container = document.getElementById('popularityHistogram');
+            
+            // Filter videos with popularity and IG views data (video type already filtered by updateCharts)
+            const validVideos = videos.filter(v => 
+                v.popularity !== null && 
+                v.popularity !== undefined && 
+                v.igViews > 0
+            );
+            
+            if (validVideos.length === 0) {
+                const filterValue = document.getElementById('histogramFilterPopularity')?.value || 'Solo Mix';
+                container.innerHTML = `<div class="empty-state"><p>No ${filterValue === 'All Videos' ? '' : filterValue + ' '}videos with Instagram views data available for popularity histogram.</p></div>`;
+                return;
+            }
+            
+            // Get data points
+            const dataPoints = validVideos.map(v => ({
+                popularity: v.popularity,
+                views: v.igViews
+            }));
+            
+            // Create histogram bins for track popularity
+            const popularityBins = [
+                { label: '<50', min: 0, max: 50, data: [] },
+                { label: '51-70', min: 51, max: 70, data: [] },
+                { label: '71-84', min: 71, max: 84, data: [] },
+                { label: '>84', min: 85, max: 100, data: [] }
+            ];
+            
+            // Sort data into popularity bins
+            dataPoints.forEach(point => {
+                for (const bin of popularityBins) {
+                    if (point.popularity >= bin.min && point.popularity <= bin.max) {
+                        bin.data.push(point);
+                        break;
+                    }
+                }
+            });
+            
+            // Calculate average views per bin
+            popularityBins.forEach(bin => {
+                if (bin.data.length > 0) {
+                    bin.avgViews = bin.data.reduce((sum, d) => sum + d.views, 0) / bin.data.length;
+                    bin.count = bin.data.length;
+                } else {
+                    bin.avgViews = 0;
+                    bin.count = 0;
+                }
+            });
+            
+            // Find max for scaling
+            const maxAvgViews = Math.max(...popularityBins.map(b => b.avgViews), 1);
+            
+            // Create histogram
+            const chartWidth = 600;
+            const chartHeight = 400;
+            const barWidth = 110;
+            const barSpacing = 20;
+            const maxBarHeight = 300;
+            const startX = 80;
+            const startY = 350;
+            
+            // Get current filter value for title
+            const filterValue = document.getElementById('histogramFilterPopularity')?.value || 'Solo Mix';
+            const filterText = filterValue === 'All Videos' ? '' : ` (${filterValue})`;
+            
+            let svg = `
+                <div style="margin-top: 15px;">
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Average Instagram Views by Song Popularity${filterText}</h3>
+                    <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
+                        <!-- Y-axis label -->
+                        <text x="20" y="${startY / 2}" transform="rotate(-90, 20, ${startY / 2})" 
+                              style="font-size: 12px; fill: #666;">Average Instagram Views</text>
+                        
+                        <!-- X-axis -->
+                        <line x1="${startX}" y1="${startY}" x2="${chartWidth - 30}" y2="${startY}" 
+                              style="stroke: #333; stroke-width: 2;" />
+                        
+                        <!-- Y-axis -->
+                        <line x1="${startX}" y1="${startY}" x2="${startX}" y2="30" 
+                              style="stroke: #333; stroke-width: 2;" />
+                        
+                        <!-- Y-axis ticks and labels -->
+                        ${[0, 0.25, 0.5, 0.75, 1.0].map((ratio, i) => {
+                            const y = startY - (ratio * maxBarHeight);
+                            const value = Math.round(maxAvgViews * ratio);
+                            return `
+                                <line x1="${startX - 5}" y1="${y}" x2="${startX}" y2="${y}" 
+                                      style="stroke: #666; stroke-width: 1;" />
+                                <text x="${startX - 10}" y="${y + 4}" text-anchor="end" 
+                                      style="font-size: 11px; fill: #666;">${value.toLocaleString()}</text>
+                            `;
+                        }).join('')}
+            `;
+            
+            // Draw popularity bars
+            popularityBins.forEach((bin, index) => {
+                if (bin.count === 0) return;
+                
+                const x = startX + (index * (barWidth + barSpacing)) + barSpacing;
+                const barHeight = (bin.avgViews / maxAvgViews) * maxBarHeight;
+                const y = startY - barHeight;
+                
+                // Bar (green for popularity)
+                svg += `
+                    <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" 
+                          style="fill: #28a745; stroke: #1e7e34; stroke-width: 1;" />
+                    <text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" 
+                          style="font-size: 11px; font-weight: 600; fill: #333;">
+                        ${Math.round(bin.avgViews).toLocaleString()}
+                    </text>
+                    <text x="${x + barWidth / 2}" y="${startY + 20}" text-anchor="middle" 
+                          style="font-size: 11px; fill: #666;">
+                        ${bin.label}
+                    </text>
+                    <text x="${x + barWidth / 2}" y="${startY + 35}" text-anchor="middle" 
+                          style="font-size: 10px; fill: #999;">
+                        (n=${bin.count})
+                    </text>
+                `;
+            });
+            
+            svg += `
+                    </svg>
+                </div>
+            `;
+            
+            container.innerHTML = svg;
+        }
+
         function displayArtistFollowersScatterTikTok(videos) {
             const container = document.getElementById('artistFollowersScatterTikTok');
             
