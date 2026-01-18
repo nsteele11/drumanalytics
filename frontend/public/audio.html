@@ -615,29 +615,49 @@
                             Visual analysis of video performance metrics.
                         </p>
                         <div id="chartingContent">
-                            <div style="margin-bottom: 20px;">
-                                <label for="scatterFilterIG" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
-                                <select id="scatterFilterIG" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
-                                    <option value="All Videos">All Videos</option>
-                                </select>
+                            <!-- Scatter Plots Row -->
+                            <div style="display: flex; gap: 30px; margin-bottom: 40px;">
+                                <div style="flex: 1;">
+                                    <div style="margin-bottom: 20px;">
+                                        <label for="scatterFilterIG" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
+                                        <select id="scatterFilterIG" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                            <option value="All Videos">All Videos</option>
+                                        </select>
+                                    </div>
+                                    <div id="artistFollowersScatter"></div>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="margin-bottom: 20px;">
+                                        <label for="scatterFilterTikTok" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
+                                        <select id="scatterFilterTikTok" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                            <option value="All Videos">All Videos</option>
+                                        </select>
+                                    </div>
+                                    <div id="artistFollowersScatterTikTok"></div>
+                                </div>
                             </div>
-                            <div id="artistFollowersScatter"></div>
                             
-                            <div style="margin-top: 30px; margin-bottom: 20px;">
-                                <label for="histogramFilter" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
-                                <select id="histogramFilter" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
-                                    <option value="All Videos">All Videos</option>
-                                </select>
+                            <!-- Histograms Row -->
+                            <div style="display: flex; gap: 30px;">
+                                <div style="flex: 1;">
+                                    <div style="margin-bottom: 20px;">
+                                        <label for="histogramFilter" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
+                                        <select id="histogramFilter" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                            <option value="All Videos">All Videos</option>
+                                        </select>
+                                    </div>
+                                    <div id="artistFollowersHistogram"></div>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="margin-bottom: 20px;">
+                                        <label for="histogramFilterPopularity" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
+                                        <select id="histogramFilterPopularity" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                            <option value="All Videos">All Videos</option>
+                                        </select>
+                                    </div>
+                                    <div id="popularityHistogram"></div>
+                                </div>
                             </div>
-                            <div id="artistFollowersHistogram"></div>
-                            
-                            <div style="margin-top: 30px; margin-bottom: 20px;">
-                                <label for="scatterFilterTikTok" style="font-weight: 600; margin-right: 10px; color: #495057;">Filter by Video Type:</label>
-                                <select id="scatterFilterTikTok" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
-                                    <option value="All Videos">All Videos</option>
-                                </select>
-                            </div>
-                            <div id="artistFollowersScatterTikTok"></div>
                         </div>
                     </div>
                 </div>
@@ -1328,15 +1348,17 @@
             const options = '<option value="All Videos">All Videos</option>' + 
                 sortedTypes.map(type => `<option value="${escapeHtml(type)}" ${type === 'Solo Mix' ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('');
             
-            // Populate all three filters
+            // Populate all four filters
             document.getElementById('scatterFilterIG').innerHTML = options;
             document.getElementById('histogramFilter').innerHTML = options;
             document.getElementById('scatterFilterTikTok').innerHTML = options;
+            document.getElementById('histogramFilterPopularity').innerHTML = options;
             
             // Add event listeners
             document.getElementById('scatterFilterIG').addEventListener('change', updateCharts);
             document.getElementById('histogramFilter').addEventListener('change', updateCharts);
             document.getElementById('scatterFilterTikTok').addEventListener('change', updateCharts);
+            document.getElementById('histogramFilterPopularity').addEventListener('change', updateCharts);
         }
         
         function filterVideosByType(videos, videoType) {
@@ -1350,15 +1372,18 @@
             const scatterFilterIG = document.getElementById('scatterFilterIG')?.value || 'Solo Mix';
             const histogramFilter = document.getElementById('histogramFilter')?.value || 'Solo Mix';
             const scatterFilterTikTok = document.getElementById('scatterFilterTikTok')?.value || 'Solo Mix';
+            const histogramFilterPopularity = document.getElementById('histogramFilterPopularity')?.value || 'Solo Mix';
             
             // Filter videos for each chart
             const scatterVideosIG = filterVideosByType(allChartingVideos, scatterFilterIG);
             const histogramVideos = filterVideosByType(allChartingVideos, histogramFilter);
+            const histogramVideosPopularity = filterVideosByType(allChartingVideos, histogramFilterPopularity);
             const scatterVideosTikTok = filterVideosByType(allChartingVideos, scatterFilterTikTok);
             
             // Display charts
             displayArtistFollowersScatter(scatterVideosIG);
             displayArtistFollowersHistogram(histogramVideos);
+            displayPopularityHistogram(histogramVideosPopularity);
             displayArtistFollowersScatterTikTok(scatterVideosTikTok);
         }
         
@@ -1391,8 +1416,8 @@
             const minViews = 0;
             const maxViews = Math.max(...dataPoints.map(d => d.views));
             
-            // Chart dimensions
-            const chartWidth = 800;
+            // Chart dimensions (adjusted for side-by-side layout)
+            const chartWidth = 600;
             const chartHeight = 400;
             const marginLeft = 80;
             const marginRight = 50;
@@ -1593,20 +1618,16 @@
                 }
             });
             
-            // Combine both bin types for display
-            const allBins = [...followerBins.filter(b => b.count > 0), ...popularityBins.filter(b => b.count > 0)];
+            // Find max for scaling (only follower bins for this chart)
+            const maxAvgViews = Math.max(...followerBins.map(b => b.avgViews), 1);
             
-            // Find max for scaling
-            const maxAvgViews = Math.max(...allBins.map(b => b.avgViews), 1);
-            
-            // Create histogram
-            const chartWidth = 1000;
+            // Create histogram (only followers)
+            const chartWidth = 600;
             const chartHeight = 400;
-            const barWidth = 110;
+            const barWidth = 90;
             const barSpacing = 15;
-            const groupSpacing = 40; // Space between follower and popularity groups
             const maxBarHeight = 300;
-            const startX = 100;
+            const startX = 80;
             const startY = 350;
             
             // Get current filter value for title
@@ -1615,20 +1636,14 @@
             
             let svg = `
                 <div style="margin-top: 15px;">
-                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Average Instagram Views by Artist Followers & Song Popularity${filterText}</h3>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #495057;">Average Instagram Views by Artist Followers${filterText}</h3>
                     <svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #e9ecef; background: #fff;">
-                        <!-- Legend -->
-                        <rect x="${chartWidth - 200}" y="10" width="15" height="15" style="fill: #007bff; stroke: #0056b3; stroke-width: 1;" />
-                        <text x="${chartWidth - 180}" y="21" style="font-size: 12px; fill: #333;">Artist Followers</text>
-                        <rect x="${chartWidth - 200}" y="30" width="15" height="15" style="fill: #28a745; stroke: #1e7e34; stroke-width: 1;" />
-                        <text x="${chartWidth - 180}" y="41" style="font-size: 12px; fill: #333;">Song Popularity</text>
-                        
                         <!-- Y-axis label -->
                         <text x="20" y="${startY / 2}" transform="rotate(-90, 20, ${startY / 2})" 
                               style="font-size: 12px; fill: #666;">Average Instagram Views</text>
                         
                         <!-- X-axis -->
-                        <line x1="${startX}" y1="${startY}" x2="${chartWidth - 50}" y2="${startY}" 
+                        <line x1="${startX}" y1="${startY}" x2="${chartWidth - 30}" y2="${startY}" 
                               style="stroke: #333; stroke-width: 2;" />
                         
                         <!-- Y-axis -->
@@ -1660,37 +1675,6 @@
                 svg += `
                     <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" 
                           style="fill: #007bff; stroke: #0056b3; stroke-width: 1;" />
-                    <text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" 
-                          style="font-size: 11px; font-weight: 600; fill: #333;">
-                        ${Math.round(bin.avgViews).toLocaleString()}
-                    </text>
-                    <text x="${x + barWidth / 2}" y="${startY + 20}" text-anchor="middle" 
-                          style="font-size: 11px; fill: #666;">
-                        ${bin.label}
-                    </text>
-                    <text x="${x + barWidth / 2}" y="${startY + 35}" text-anchor="middle" 
-                          style="font-size: 10px; fill: #999;">
-                        (n=${bin.count})
-                    </text>
-                `;
-            });
-            
-            // Calculate starting position for popularity bars (after follower bars + spacing)
-            const followerBarsCount = followerBins.filter(b => b.count > 0).length;
-            const popularityStartX = startX + (followerBarsCount * (barWidth + barSpacing)) + barSpacing + groupSpacing;
-            
-            // Draw popularity bars
-            popularityBins.forEach((bin, index) => {
-                if (bin.count === 0) return;
-                
-                const x = popularityStartX + (index * (barWidth + barSpacing)) + barSpacing;
-                const barHeight = (bin.avgViews / maxAvgViews) * maxBarHeight;
-                const y = startY - barHeight;
-                
-                // Bar (green for popularity)
-                svg += `
-                    <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" 
-                          style="fill: #28a745; stroke: #1e7e34; stroke-width: 1;" />
                     <text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" 
                           style="font-size: 11px; font-weight: 600; fill: #333;">
                         ${Math.round(bin.avgViews).toLocaleString()}
@@ -1743,8 +1727,8 @@
             const minViews = 0;
             const maxViews = Math.max(...dataPoints.map(d => d.views));
             
-            // Chart dimensions
-            const chartWidth = 800;
+            // Chart dimensions (adjusted for side-by-side layout)
+            const chartWidth = 600;
             const chartHeight = 400;
             const marginLeft = 80;
             const marginRight = 50;

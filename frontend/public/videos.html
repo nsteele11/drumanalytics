@@ -643,7 +643,21 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
         
         // Position dropdown left-aligned to video card, below the trigger
         dropdown.style.position = 'fixed';
-        dropdown.style.left = cardRect.left + 'px';
+        
+        // Calculate dropdown width (default max-width is 500px from CSS, but actual width may be less)
+        const dropdownMaxWidth = 500;
+        const viewportWidth = window.innerWidth;
+        const padding = 10; // Padding from viewport edge
+        
+        let leftPosition = cardRect.left;
+        
+        // Check if dropdown would overflow the right edge of viewport
+        if (leftPosition + dropdownMaxWidth > viewportWidth - padding) {
+            // Adjust to keep within viewport - align right edge with padding from viewport edge
+            leftPosition = Math.max(padding, viewportWidth - dropdownMaxWidth - padding);
+        }
+        
+        dropdown.style.left = leftPosition + 'px';
         dropdown.style.top = (triggerRect.bottom + 4) + 'px';
         dropdown.style.zIndex = '1000000';
     }
@@ -728,7 +742,21 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
         
         // Position dropdown left-aligned to video card, below the trigger
         dropdown.style.position = 'fixed';
-        dropdown.style.left = cardRect.left + 'px';
+        
+        // Calculate dropdown width (default max-width is 500px from CSS, but actual width may be less)
+        const dropdownMaxWidth = 500;
+        const viewportWidth = window.innerWidth;
+        const padding = 10; // Padding from viewport edge
+        
+        let leftPosition = cardRect.left;
+        
+        // Check if dropdown would overflow the right edge of viewport
+        if (leftPosition + dropdownMaxWidth > viewportWidth - padding) {
+            // Adjust to keep within viewport - align right edge with padding from viewport edge
+            leftPosition = Math.max(padding, viewportWidth - dropdownMaxWidth - padding);
+        }
+        
+        dropdown.style.left = leftPosition + 'px';
         dropdown.style.top = (triggerRect.bottom + 4) + 'px';
         dropdown.style.zIndex = '1000000';
     }
