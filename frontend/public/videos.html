@@ -633,9 +633,28 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     const dropdown = document.getElementById(`shock-dropdown-${id}`);
     if (!dropdown) return;
     
-    // Find the video card and trigger BEFORE moving dropdown to body (closest won't work after move)
-    const trigger = dropdown.closest('.hoverable-score-container');
-    const videoCard = trigger ? trigger.closest('.video-card') : null;
+    // Find the trigger element - if dropdown is already in body, find it via the original parent or by searching
+    let trigger = null;
+    let videoCard = null;
+    
+    // Try to find trigger using closest (works if dropdown is still in original location)
+    if (dropdown.parentElement && dropdown.parentElement !== document.body) {
+        trigger = dropdown.closest('.hoverable-score-container');
+        videoCard = trigger ? trigger.closest('.video-card') : null;
+    }
+    
+    // If not found, search for it by the dropdown ID pattern
+    if (!trigger || !videoCard) {
+        // The id format is 'shock-dropdown-shock-${s3Key}', so we extract the s3Key
+        const s3Key = id.replace('shock-', '');
+        // Try multiple search strategies
+        const clickableScore = document.querySelector(`span.clickable-score[onmouseenter*="'shock-${s3Key}'"]`) ||
+                              document.querySelector(`.clickable-score[onmouseenter*="${s3Key}"]`);
+        if (clickableScore) {
+            trigger = clickableScore.closest('.hoverable-score-container');
+            videoCard = trigger ? trigger.closest('.video-card') : null;
+        }
+    }
     
     // Close all other score dropdowns
     document.querySelectorAll('.score-dropdown').forEach(dd => {
@@ -689,7 +708,7 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
         document.body.appendChild(dropdown);
     }
     
-    // Show dropdown temporarily to measure its width (but position it off-screen)
+    // Reset all positioning styles to ensure clean state
     dropdown.style.display = 'block';
     dropdown.style.position = 'fixed';
     dropdown.style.visibility = 'hidden';
@@ -697,6 +716,8 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     dropdown.style.left = '-9999px';
     dropdown.style.zIndex = '2147483647'; // Set z-index early
     dropdown.style.transform = 'translateZ(0)'; // Force new stacking context
+    dropdown.style.right = 'auto'; // Clear any right positioning
+    dropdown.style.bottom = 'auto'; // Clear any bottom positioning
     
     // Use offsetWidth which works even when visibility is hidden
     // Force a reflow to ensure dimensions are calculated
@@ -744,6 +765,7 @@ function hideShockValueDropdown(id) {
         const dropdown = document.getElementById(`shock-dropdown-${id}`);
         if (dropdown) {
             dropdown.style.display = 'none';
+            dropdown.style.visibility = 'hidden';
         }
         scoreDropdownTimeout = null;
     }, 200);
@@ -759,9 +781,28 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     const dropdown = document.getElementById(`success-dropdown-${id}`);
     if (!dropdown) return;
     
-    // Find the video card and trigger BEFORE moving dropdown to body (closest won't work after move)
-    const trigger = dropdown.closest('.hoverable-score-container');
-    const videoCard = trigger ? trigger.closest('.video-card') : null;
+    // Find the trigger element - if dropdown is already in body, find it via the original parent or by searching
+    let trigger = null;
+    let videoCard = null;
+    
+    // Try to find trigger using closest (works if dropdown is still in original location)
+    if (dropdown.parentElement && dropdown.parentElement !== document.body) {
+        trigger = dropdown.closest('.hoverable-score-container');
+        videoCard = trigger ? trigger.closest('.video-card') : null;
+    }
+    
+    // If not found, search for it by the dropdown ID pattern
+    if (!trigger || !videoCard) {
+        // The id format is 'success-dropdown-success-${s3Key}', so we extract the s3Key
+        const s3Key = id.replace('success-', '');
+        // Try multiple search strategies
+        const clickableScore = document.querySelector(`span.clickable-score[onmouseenter*="'success-${s3Key}'"]`) ||
+                              document.querySelector(`.clickable-score[onmouseenter*="${s3Key}"]`);
+        if (clickableScore) {
+            trigger = clickableScore.closest('.hoverable-score-container');
+            videoCard = trigger ? trigger.closest('.video-card') : null;
+        }
+    }
     
     // Close all other score dropdowns
     document.querySelectorAll('.score-dropdown').forEach(dd => {
@@ -886,12 +927,16 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
         </div>
     `;
     
-    // Show dropdown temporarily to measure its width (but position it off-screen)
+    // Reset all positioning styles to ensure clean state
     dropdown.style.display = 'block';
     dropdown.style.position = 'fixed';
     dropdown.style.visibility = 'hidden';
     dropdown.style.top = '0px';
     dropdown.style.left = '-9999px';
+    dropdown.style.zIndex = '2147483647'; // Set z-index early
+    dropdown.style.transform = 'translateZ(0)'; // Force new stacking context
+    dropdown.style.right = 'auto'; // Clear any right positioning
+    dropdown.style.bottom = 'auto'; // Clear any bottom positioning
     
     // Use offsetWidth which works even when visibility is hidden
     // Force a reflow to ensure dimensions are calculated
@@ -941,6 +986,7 @@ function hideSuccessScoreDropdown(id) {
         const dropdown = document.getElementById(`success-dropdown-${id}`);
         if (dropdown) {
             dropdown.style.display = 'none';
+            dropdown.style.visibility = 'hidden';
         }
         scoreDropdownTimeout = null;
     }, 200);

@@ -1602,6 +1602,12 @@
 
         function displayArtistFollowersHistogram(videos, platform = 'Instagram') {
             const container = document.getElementById('artistFollowersHistogram');
+            if (!container) return;
+            
+            // Ensure platform is always defined (handle undefined, null, empty string)
+            if (!platform || platform === 'undefined' || platform === 'null') {
+                platform = 'Instagram';
+            }
             
             // Filter videos with artistFollowers and views data based on platform (video type already filtered by updateCharts)
             const validVideos = videos.filter(v => {
@@ -1770,26 +1776,36 @@
             container.innerHTML = svg;
         }
 
-        function displayPopularityHistogram(videos) {
+        function displayPopularityHistogram(videos, platform = 'Instagram') {
             const container = document.getElementById('popularityHistogram');
+            if (!container) return;
             
-            // Filter videos with popularity and IG views data (video type already filtered by updateCharts)
-            const validVideos = videos.filter(v => 
-                v.popularity !== null && 
-                v.popularity !== undefined && 
-                v.igViews > 0
-            );
+            // Ensure platform is always defined (handle undefined, null, empty string)
+            if (!platform || platform === 'undefined' || platform === 'null') {
+                platform = 'Instagram';
+            }
+            
+            // Filter videos with popularity and views data based on platform (video type already filtered by updateCharts)
+            const validVideos = videos.filter(v => {
+                if (v.popularity === null || v.popularity === undefined) return false;
+                if (platform === 'Instagram') {
+                    return v.igViews > 0;
+                } else {
+                    return v.tiktokViews > 0;
+                }
+            });
             
             if (validVideos.length === 0) {
                 const filterValue = document.getElementById('histogramFilterPopularity')?.value || 'Solo Mix';
-                container.innerHTML = `<div class="empty-state"><p>No ${filterValue === 'All Videos' ? '' : filterValue + ' '}videos with Instagram views data available for popularity histogram.</p></div>`;
+                const platformText = platform === 'Instagram' ? 'Instagram' : 'TikTok';
+                container.innerHTML = `<div class="empty-state"><p>No ${filterValue === 'All Videos' ? '' : filterValue + ' '}videos with ${platformText} views data available for popularity histogram.</p></div>`;
                 return;
             }
             
-            // Get data points
+            // Get data points using the selected platform's views
             const dataPoints = validVideos.map(v => ({
                 popularity: v.popularity,
-                views: v.igViews
+                views: platform === 'Instagram' ? v.igViews : v.tiktokViews
             }));
             
             // Create histogram bins for track popularity
