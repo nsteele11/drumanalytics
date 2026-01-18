@@ -637,31 +637,6 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     const trigger = dropdown.closest('.hoverable-score-container');
     const videoCard = trigger ? trigger.closest('.video-card') : null;
     
-    if (videoCard && trigger) {
-        const cardRect = videoCard.getBoundingClientRect();
-        const triggerRect = trigger.getBoundingClientRect();
-        
-        // Position dropdown left-aligned to video card, below the trigger
-        dropdown.style.position = 'fixed';
-        
-        // Calculate dropdown width (default max-width is 500px from CSS, but actual width may be less)
-        const dropdownMaxWidth = 500;
-        const viewportWidth = window.innerWidth;
-        const padding = 10; // Padding from viewport edge
-        
-        let leftPosition = cardRect.left;
-        
-        // Check if dropdown would overflow the right edge of viewport
-        if (leftPosition + dropdownMaxWidth > viewportWidth - padding) {
-            // Adjust to keep within viewport - align right edge with padding from viewport edge
-            leftPosition = Math.max(padding, viewportWidth - dropdownMaxWidth - padding);
-        }
-        
-        dropdown.style.left = leftPosition + 'px';
-        dropdown.style.top = (triggerRect.bottom + 4) + 'px';
-        dropdown.style.zIndex = '1000000';
-    }
-    
     // Close all other score dropdowns
     document.querySelectorAll('.score-dropdown').forEach(dd => {
         if (dd.id !== `shock-dropdown-${id}` && dd.id !== `success-dropdown-${id}`) {
@@ -676,6 +651,7 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
     
     const hasComponents = tempoSpikesValue !== null || volumeSpikesValue !== null || unusualPatternsValue !== null;
     
+    // Set content first so we can measure actual width
     if (hasComponents) {
         dropdown.innerHTML = `
             <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
@@ -707,8 +683,51 @@ function showShockValueDropdown(id, shockValue, tempoSpikes, volumeSpikes, unusu
         dropdown.innerHTML = '<p>No detailed shock value components available for this video.</p>';
     }
     
+    // Show dropdown temporarily to measure its width (but position it off-screen)
     dropdown.style.display = 'block';
-    dropdown.style.zIndex = '100000';
+    dropdown.style.position = 'fixed';
+    dropdown.style.visibility = 'hidden';
+    dropdown.style.top = '0px';
+    dropdown.style.left = '-9999px';
+    
+    // Use offsetWidth which works even when visibility is hidden
+    // Force a reflow to ensure dimensions are calculated
+    void dropdown.offsetWidth;
+    
+    // Now position it properly using actual measurements
+    if (videoCard && trigger) {
+        const cardRect = videoCard.getBoundingClientRect();
+        const triggerRect = trigger.getBoundingClientRect();
+        
+        const viewportWidth = window.innerWidth;
+        const padding = 10; // Padding from viewport edge
+        
+        // Get actual dropdown width using offsetWidth (works even when hidden)
+        const dropdownWidth = dropdown.offsetWidth || 320; // fallback to min-width
+        
+        // Start with left edge aligned to card
+        let leftPosition = cardRect.left;
+        
+        // Check if dropdown would overflow the right edge of viewport
+        if (leftPosition + dropdownWidth > viewportWidth - padding) {
+            // Adjust to keep within viewport
+            leftPosition = Math.max(padding, viewportWidth - dropdownWidth - padding);
+        }
+        
+        // Ensure we don't go off the left edge
+        if (leftPosition < padding) {
+            leftPosition = padding;
+        }
+        
+        // Apply final position and make visible
+        dropdown.style.left = leftPosition + 'px';
+        dropdown.style.top = (triggerRect.bottom + 4) + 'px';
+        dropdown.style.zIndex = '1000000';
+        dropdown.style.visibility = 'visible';
+    } else {
+        dropdown.style.visibility = 'visible';
+        dropdown.style.zIndex = '100000';
+    }
 }
 
 function hideShockValueDropdown(id) {
@@ -735,31 +754,6 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     // Find the video card container (closest parent with class 'video-card')
     const trigger = dropdown.closest('.hoverable-score-container');
     const videoCard = trigger ? trigger.closest('.video-card') : null;
-    
-    if (videoCard && trigger) {
-        const cardRect = videoCard.getBoundingClientRect();
-        const triggerRect = trigger.getBoundingClientRect();
-        
-        // Position dropdown left-aligned to video card, below the trigger
-        dropdown.style.position = 'fixed';
-        
-        // Calculate dropdown width (default max-width is 500px from CSS, but actual width may be less)
-        const dropdownMaxWidth = 500;
-        const viewportWidth = window.innerWidth;
-        const padding = 10; // Padding from viewport edge
-        
-        let leftPosition = cardRect.left;
-        
-        // Check if dropdown would overflow the right edge of viewport
-        if (leftPosition + dropdownMaxWidth > viewportWidth - padding) {
-            // Adjust to keep within viewport - align right edge with padding from viewport edge
-            leftPosition = Math.max(padding, viewportWidth - dropdownMaxWidth - padding);
-        }
-        
-        dropdown.style.left = leftPosition + 'px';
-        dropdown.style.top = (triggerRect.bottom + 4) + 'px';
-        dropdown.style.zIndex = '1000000';
-    }
     
     // Close all other score dropdowns
     document.querySelectorAll('.score-dropdown').forEach(dd => {
@@ -884,8 +878,47 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
         </div>
     `;
     
+    // Show dropdown temporarily to measure its width (but position it off-screen)
     dropdown.style.display = 'block';
-    dropdown.style.zIndex = '1000000';
+    dropdown.style.position = 'fixed';
+    dropdown.style.visibility = 'hidden';
+    dropdown.style.left = '-9999px';
+    
+    // Now position it properly using actual measurements
+    if (videoCard && trigger) {
+        const cardRect = videoCard.getBoundingClientRect();
+        const triggerRect = trigger.getBoundingClientRect();
+        const dropdownRect = dropdown.getBoundingClientRect();
+        
+        const viewportWidth = window.innerWidth;
+        const padding = 10; // Padding from viewport edge
+        
+        // Start with left edge aligned to card
+        let leftPosition = cardRect.left;
+        
+        // Get actual dropdown width
+        const dropdownWidth = dropdownRect.width || 320; // fallback to min-width
+        
+        // Check if dropdown would overflow the right edge of viewport
+        if (leftPosition + dropdownWidth > viewportWidth - padding) {
+            // Adjust to keep within viewport
+            leftPosition = Math.max(padding, viewportWidth - dropdownWidth - padding);
+        }
+        
+        // Ensure we don't go off the left edge
+        if (leftPosition < padding) {
+            leftPosition = padding;
+        }
+        
+        // Apply final position and make visible
+        dropdown.style.left = leftPosition + 'px';
+        dropdown.style.top = (triggerRect.bottom + 4) + 'px';
+        dropdown.style.zIndex = '1000000';
+        dropdown.style.visibility = 'visible';
+    } else {
+        dropdown.style.visibility = 'visible';
+        dropdown.style.zIndex = '1000000';
+    }
 }
 
 function hideSuccessScoreDropdown(id) {

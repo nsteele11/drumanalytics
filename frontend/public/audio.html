@@ -742,9 +742,6 @@
             
             // Load and display charts
             loadChartingData();
-            
-            // Load and display charts
-            loadChartingData();
         }
 
         function displayMetadataInfo(metadata) {
@@ -1323,18 +1320,26 @@
                 const scatterContainer = document.getElementById('artistFollowersScatter');
                 const histogramContainer = document.getElementById('artistFollowersHistogram');
                 const scatterTikTokContainer = document.getElementById('artistFollowersScatterTikTok');
+                const popularityHistogramContainer = document.getElementById('popularityHistogram');
+                const errorMessage = `<div class="empty-state"><p>Error loading chart data: ${err.message}</p></div>`;
                 if (scatterContainer) {
-                    scatterContainer.innerHTML = '<div class="empty-state"><p>Error loading Instagram scatter chart data.</p></div>';
+                    scatterContainer.innerHTML = errorMessage;
                 }
                 if (histogramContainer) {
-                    histogramContainer.innerHTML = '<div class="empty-state"><p>Error loading histogram chart data.</p></div>';
+                    histogramContainer.innerHTML = errorMessage;
                 }
                 if (scatterTikTokContainer) {
-                    scatterTikTokContainer.innerHTML = '<div class="empty-state"><p>Error loading TikTok scatter chart data.</p></div>';
+                    scatterTikTokContainer.innerHTML = errorMessage;
+                }
+                if (popularityHistogramContainer) {
+                    popularityHistogramContainer.innerHTML = errorMessage;
                 }
             }
         }
 
+        // Track if listeners have been added to avoid duplicates
+        let filtersInitialized = false;
+        
         function populateVideoTypeFilters(videos) {
             // Get unique video types
             const videoTypes = new Set();
@@ -1348,17 +1353,30 @@
             const options = '<option value="All Videos">All Videos</option>' + 
                 sortedTypes.map(type => `<option value="${escapeHtml(type)}" ${type === 'Solo Mix' ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('');
             
-            // Populate all four filters
-            document.getElementById('scatterFilterIG').innerHTML = options;
-            document.getElementById('histogramFilter').innerHTML = options;
-            document.getElementById('scatterFilterTikTok').innerHTML = options;
-            document.getElementById('histogramFilterPopularity').innerHTML = options;
+            // Populate all four filters (check if they exist first)
+            const scatterFilterIG = document.getElementById('scatterFilterIG');
+            const histogramFilter = document.getElementById('histogramFilter');
+            const scatterFilterTikTok = document.getElementById('scatterFilterTikTok');
+            const histogramFilterPopularity = document.getElementById('histogramFilterPopularity');
             
-            // Add event listeners
-            document.getElementById('scatterFilterIG').addEventListener('change', updateCharts);
-            document.getElementById('histogramFilter').addEventListener('change', updateCharts);
-            document.getElementById('scatterFilterTikTok').addEventListener('change', updateCharts);
-            document.getElementById('histogramFilterPopularity').addEventListener('change', updateCharts);
+            if (!scatterFilterIG || !histogramFilter || !scatterFilterTikTok || !histogramFilterPopularity) {
+                console.error('Chart filter elements not found. Charting section may not be loaded yet.');
+                return;
+            }
+            
+            scatterFilterIG.innerHTML = options;
+            histogramFilter.innerHTML = options;
+            scatterFilterTikTok.innerHTML = options;
+            histogramFilterPopularity.innerHTML = options;
+            
+            // Add event listeners only once
+            if (!filtersInitialized) {
+                scatterFilterIG.addEventListener('change', updateCharts);
+                histogramFilter.addEventListener('change', updateCharts);
+                scatterFilterTikTok.addEventListener('change', updateCharts);
+                histogramFilterPopularity.addEventListener('change', updateCharts);
+                filtersInitialized = true;
+            }
         }
         
         function filterVideosByType(videos, videoType) {
@@ -1369,22 +1387,39 @@
         }
         
         function updateCharts() {
-            const scatterFilterIG = document.getElementById('scatterFilterIG')?.value || 'Solo Mix';
-            const histogramFilter = document.getElementById('histogramFilter')?.value || 'Solo Mix';
-            const scatterFilterTikTok = document.getElementById('scatterFilterTikTok')?.value || 'Solo Mix';
-            const histogramFilterPopularity = document.getElementById('histogramFilterPopularity')?.value || 'Solo Mix';
-            
-            // Filter videos for each chart
-            const scatterVideosIG = filterVideosByType(allChartingVideos, scatterFilterIG);
-            const histogramVideos = filterVideosByType(allChartingVideos, histogramFilter);
-            const histogramVideosPopularity = filterVideosByType(allChartingVideos, histogramFilterPopularity);
-            const scatterVideosTikTok = filterVideosByType(allChartingVideos, scatterFilterTikTok);
-            
-            // Display charts
-            displayArtistFollowersScatter(scatterVideosIG);
-            displayArtistFollowersHistogram(histogramVideos);
-            displayPopularityHistogram(histogramVideosPopularity);
-            displayArtistFollowersScatterTikTok(scatterVideosTikTok);
+            try {
+                if (!allChartingVideos || allChartingVideos.length === 0) {
+                    console.warn('No charting videos available');
+                    return;
+                }
+                
+                const scatterFilterIG = document.getElementById('scatterFilterIG')?.value || 'Solo Mix';
+                const histogramFilter = document.getElementById('histogramFilter')?.value || 'Solo Mix';
+                const scatterFilterTikTok = document.getElementById('scatterFilterTikTok')?.value || 'Solo Mix';
+                const histogramFilterPopularity = document.getElementById('histogramFilterPopularity')?.value || 'Solo Mix';
+                
+                // Filter videos for each chart
+                const scatterVideosIG = filterVideosByType(allChartingVideos, scatterFilterIG);
+                const histogramVideos = filterVideosByType(allChartingVideos, histogramFilter);
+                const histogramVideosPopularity = filterVideosByType(allChartingVideos, histogramFilterPopularity);
+                const scatterVideosTikTok = filterVideosByType(allChartingVideos, scatterFilterTikTok);
+                
+                // Display charts
+                displayArtistFollowersScatter(scatterVideosIG);
+                displayArtistFollowersHistogram(histogramVideos);
+                displayPopularityHistogram(histogramVideosPopularity);
+                displayArtistFollowersScatterTikTok(scatterVideosTikTok);
+            } catch (err) {
+                console.error('Error updating charts:', err);
+                const errorMessage = `<div class="empty-state"><p>Error displaying charts: ${err.message}</p></div>`;
+                const containers = ['artistFollowersScatter', 'artistFollowersHistogram', 'popularityHistogram', 'artistFollowersScatterTikTok'];
+                containers.forEach(id => {
+                    const container = document.getElementById(id);
+                    if (container) {
+                        container.innerHTML = errorMessage;
+                    }
+                });
+            }
         }
         
         function displayArtistFollowersScatter(videos) {
