@@ -927,6 +927,12 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
         </div>
     `;
     
+    // Move dropdown to body FIRST to avoid parent container clipping issues
+    // This must be done before getting cardRect/triggerRect
+    if (dropdown.parentElement !== document.body) {
+        document.body.appendChild(dropdown);
+    }
+    
     // Reset all positioning styles to ensure clean state
     dropdown.style.display = 'block';
     dropdown.style.position = 'fixed';
@@ -944,6 +950,7 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
     
     // Now position it properly using actual measurements
     if (videoCard && trigger) {
+        // Get bounding rects AFTER moving to body (these are still valid)
         const cardRect = videoCard.getBoundingClientRect();
         const triggerRect = trigger.getBoundingClientRect();
         
@@ -970,13 +977,10 @@ function showSuccessScoreDropdown(id, igViews, igLikes, tiktokViews, tiktokLikes
         // Apply final position and make visible
         dropdown.style.left = leftPosition + 'px';
         dropdown.style.top = (triggerRect.bottom + 4) + 'px';
-        dropdown.style.zIndex = '2147483647'; // Maximum z-index
         dropdown.style.visibility = 'visible';
-        dropdown.style.transform = 'translateZ(0)'; // Force new stacking context
     } else {
+        // Fallback if card/trigger not found
         dropdown.style.visibility = 'visible';
-        dropdown.style.zIndex = '2147483647'; // Maximum z-index
-        dropdown.style.transform = 'translateZ(0)'; // Force new stacking context
     }
 }
 
