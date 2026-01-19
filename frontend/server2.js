@@ -12,6 +12,8 @@ import { analyzeVideo } from "../analysis/analyze_video.js";
 import { extractVideoSnapshot } from "../analysis/extract_snapshot.js";
 import { generateStructuredOutputs } from "../analysis/performance_analysis.js";
 import spotifyRoutes from "./spotifyRoutes.js";
+import OpenAI from "openai";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
@@ -2412,6 +2414,237 @@ app.delete("/api/videos/:s3Key", async (req, res) => {
 });
 
 // ----------------------
+// GPT Insights Endpoint with Rate Limiting
+// ----------------------
+const gptRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per windowMs
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Initialize OpenAI client (API key must be in .env as OPENAI_API_KEY)
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+}) : null;
+
+app.post("/api/gpt-insights", gptRateLimiter, async (req, res) => {
+  try {
+    // Check if OpenAI is configured
+    if (!openai) {
+      return res.status(500).json({ 
+        error: "OpenAI API key not configured. Please set OPENAI_API_KEY in environment variables." 
+      });
+    }
+
+    const { question } = req.body;
+
+    if (!question || typeof question !== 'string' || question.trim().length === 0) {
+      return res.status(400).json({ error: "Question is required and must be a non-empty string." });
+    }
+
+    // Fetch all video metadata to use as context
+    const listCommand = new ListObjectsV2Command({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Prefix: "results/",
+    });
+
+    const listResponse = await s3.send(listCommand);
+    
+    if (!listResponse.Contents || listResponse.Contents.length === 0) {
+      return res.status(404).json({ error: "No video data available for analysis." });
+    }
+
+    // Collect video metadata summaries
+    const videoSummaries = [];
+    let processedCount = 0;
+    const maxVideos = 50; // Limit to prevent token overflow
+
+    for (const obj of listResponse.Contents) {
+      if (processedCount >= maxVideos) break;
+      if (!obj.Key || !obj.Key.endsWith('.json')) continue;
+
+      try {
+        const getMetadataCommand = new GetObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME,
+          Key: obj.Key,
+        });
+
+        const metadataResponse = await s3.send(getMetadataCommand);
+        const metadataStream = metadataResponse.Body;
+        
+        const metadataText = await new Promise((resolve, reject) => {
+          const chunks = [];
+          metadataStream.on('data', (chunk) => chunks.push(chunk));
+          metadataStream.on('end', () => {
+            try {
+              resolve(Buffer.concat(chunks).toString('utf-8'));
+            } catch (err) {
+              reject(err);
+            }
+          });
+          metadataStream.on('error', reject);
+        });
+
+        const metadata = JSON.parse(metadataText);
+        
+        // Get latest metrics
+        let latestMetrics = {
+          igViews: metadata.igViews || null,
+          igLikes: metadata.igLikes || null,
+          tiktokViews: metadata.tiktokViews || null,
+          tiktokLikes: metadata.tiktokLikes || null,
+        };
+        
+        if (metadata.metricsHistory && metadata.metricsHistory.length > 0) {
+          const mostRecentHistory = metadata.metricsHistory[0];
+          if (mostRecentHistory.current && mostRecentHistory.timestamp) {
+            const historyTimestamp = new Date(mostRecentHistory.timestamp);
+            const metadataTimestamp = metadata.metricsUpdatedAt ? new Date(metadata.metricsUpdatedAt) : null;
+            if (!metadataTimestamp || historyTimestamp > metadataTimestamp) {
+              latestMetrics = {
+                igViews: mostRecentHistory.current.igViews !== undefined ? mostRecentHistory.current.igViews : latestMetrics.igViews,
+                igLikes: mostRecentHistory.current.igLikes !== undefined ? mostRecentHistory.current.igLikes : latestMetrics.igLikes,
+                tiktokViews: mostRecentHistory.current.tiktokViews !== undefined ? mostRecentHistory.current.tiktokViews : latestMetrics.tiktokViews,
+                tiktokLikes: mostRecentHistory.current.tiktokLikes !== undefined ? mostRecentHistory.current.tiktokLikes : latestMetrics.tiktokLikes,
+              };
+            }
+          }
+        }
+
+        // Create summary of video data
+        const summary = {
+          trackName: metadata.trackName || metadata.spotify?.track?.name || 'Unknown',
+          artistName: metadata.artistName || metadata.spotify?.artist?.name || 'Unknown',
+          videoType: metadata.videoType || null,
+          popularity: metadata.spotify?.track?.popularity || null,
+          artistFollowers: metadata.spotify?.artist?.followers || null,
+          genres: metadata.spotify?.artist?.genres || [],
+          igViews: latestMetrics.igViews,
+          igLikes: latestMetrics.igLikes,
+          tiktokViews: latestMetrics.tiktokViews,
+          tiktokLikes: latestMetrics.tiktokLikes,
+          igHashtags: metadata.igHashtags || null,
+          tiktokHashtags: metadata.tiktokHashtags || null,
+          shockValue: metadata.analysis?.shockValue || null,
+          bpm: metadata.analysis?.bpm || null,
+        };
+
+        videoSummaries.push(summary);
+        processedCount++;
+      } catch (err) {
+        console.error(`Error processing metadata for ${obj.Key}:`, err);
+        // Continue with next video
+      }
+    }
+
+    // Create context from video summaries
+    const contextText = JSON.stringify(videoSummaries, null, 2);
+
+    // Call OpenAI API
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert video analytics consultant. You analyze video performance data to provide insights and recommendations. You have access to video metadata including:
+- Track and artist information
+- Video type (Solo Mix, Collab, Live, Original, Other)
+- Spotify metadata (popularity, artist followers, genres)
+- Social media metrics (Instagram and TikTok views, likes, hashtags)
+- Audio analysis (shock value, BPM)
+
+Use this data to answer questions about video performance patterns, best practices, and insights. Be specific and data-driven in your responses.`
+        },
+        {
+          role: "user",
+          content: `Here is the video metadata from ${videoSummaries.length} videos:\n\n${contextText}\n\nQuestion: ${question}\n\nPlease provide a detailed, data-driven answer based on this video performance data.`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000
+    });
+
+    const answer = completion.choices[0]?.message?.content || "No response generated.";
+
+    res.json({
+      answer: answer,
+      videosAnalyzed: videoSummaries.length
+    });
+
+  } catch (err) {
+    console.error("Error in GPT insights endpoint:", err);
+    
+    // Handle rate limiting errors
+    if (err.status === 429) {
+      return res.status(429).json({ error: "Rate limit exceeded. Please try again later." });
+    }
+    
+    // Handle OpenAI API errors
+    if (err.response) {
+      return res.status(500).json({ 
+        error: `OpenAI API error: ${err.response.data?.error?.message || err.message}` 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: "Failed to process GPT request", 
+      message: err.message 
+    });
+  }
+});
+
+// ----------------------
+// GPT Insights Health Check Endpoint
+// ----------------------
+app.get("/api/gpt-insights/health", async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ 
+        status: "not_configured",
+        message: "OpenAI API key not configured. Please set OPENAI_API_KEY in environment variables." 
+      });
+    }
+
+    // Test the API key with a simple request
+    try {
+      const testCompletion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "user", content: "Say 'OK' if you can read this." }
+        ],
+        max_tokens: 10
+      });
+
+      const response = testCompletion.choices[0]?.message?.content || "";
+      
+      return res.json({
+        status: "working",
+        message: "OpenAI API key is valid and working!",
+        testResponse: response.trim()
+      });
+    } catch (apiError) {
+      if (apiError.status === 401 || apiError.status === 403) {
+        return res.status(401).json({
+          status: "invalid_key",
+          message: "OpenAI API key is invalid or unauthorized.",
+          error: apiError.message
+        });
+      }
+      throw apiError;
+    }
+  } catch (err) {
+    console.error("Error checking OpenAI health:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Error testing OpenAI API key",
+      error: err.message
+    });
+  }
+});
+
+// ----------------------
 // Upload Page Route
 // ----------------------
 app.get("/drumanalytics", (req, res) => {
@@ -2424,4 +2657,11 @@ app.get("/drumanalytics", (req, res) => {
 const PORT = 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`SERVER2 running at http://0.0.0.0:${PORT}`);
+  if (!openai) {
+    console.warn("⚠️  WARNING: OPENAI_API_KEY not set. GPT Insights feature will not work.");
+    console.warn("   Set OPENAI_API_KEY in your .env file and restart the server.");
+  } else {
+    console.log("✅ GPT Insights endpoint enabled");
+    console.log("   Test the API key at: http://localhost:3001/api/gpt-insights/health");
+  }
 });

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT Insights - DrumAnalytics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        .gpt-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .gpt-header {
+            margin-bottom: 30px;
+        }
+        
+        .gpt-header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        
+        .gpt-header p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+        
+        .question-form {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .question-input-container {
+            margin-bottom: 15px;
+        }
+        
+        .question-input-container label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .question-input-container textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: 'Roboto', sans-serif;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        
+        .question-input-container textarea:focus {
+            outline: none;
+            border-color: #333;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+        }
+        
+        .submit-btn {
+            padding: 12px 24px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .submit-btn:hover:not(:disabled) {
+            background-color: #555;
+        }
+        
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .response-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .response-container.show {
+            display: block;
+        }
+        
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .response-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 18px;
+        }
+        
+        .response-content {
+            color: #495057;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        .loading-indicator {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .rate-limit-message {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .rate-limit-message.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html">Instagram Insights</a>
+        <a href="prerecording.html">Pre Recording</a>
+        <a href="upload.html">Video Upload</a>
+        <a href="videos.html">Videos</a>
+        <a href="audio.html">Audio Analytics</a>
+        <a href="gpt-insights.html" class="active">GPT Insights</a>
+    </nav>
+
+    <main>
+        <div class="gpt-container">
+            <div class="gpt-header">
+                <h1>🤖 GPT Insights</h1>
+                <p>Ask questions about your video performance data. GPT will analyze your video metadata to provide insights.</p>
+                <div id="apiStatus" style="margin-top: 10px; padding: 8px; border-radius: 4px; font-size: 12px; display: none;"></div>
+            </div>
+
+            <div class="question-form">
+                <div class="question-input-container">
+                    <label for="questionInput">Your Question:</label>
+                    <textarea id="questionInput" placeholder="e.g., What types of videos perform best? Which hashtags are most effective? What patterns do you see in top performers?"></textarea>
+                </div>
+                <button id="submitBtn" class="submit-btn" onclick="submitQuestion()">Ask GPT</button>
+            </div>
+
+            <div id="errorMessage" class="error-message"></div>
+            <div id="rateLimitMessage" class="rate-limit-message"></div>
+
+            <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                <p>🤔 GPT is analyzing your video data...</p>
+            </div>
+
+            <div id="responseContainer" class="response-container">
+                <div class="response-header">
+                    <h3>GPT Response</h3>
+                </div>
+                <div id="responseContent" class="response-content"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Check API status on page load
+        async function checkAPIStatus() {
+            const statusDiv = document.getElementById('apiStatus');
+            try {
+                const response = await fetch('/api/gpt-insights/health');
+                const data = await response.json();
+                
+                if (data.status === 'working') {
+                    statusDiv.style.backgroundColor = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.style.border = '1px solid #c3e6cb';
+                    statusDiv.textContent = '✅ OpenAI API is configured and working!';
+                    statusDiv.style.display = 'block';
+                } else if (data.status === 'not_configured') {
+                    statusDiv.style.backgroundColor = '#fff3cd';
+                    statusDiv.style.color = '#856404';
+                    statusDiv.style.border = '1px solid #ffeaa7';
+                    statusDiv.textContent = '⚠️ OpenAI API key not configured. Please set OPENAI_API_KEY in your .env file.';
+                    statusDiv.style.display = 'block';
+                } else if (data.status === 'invalid_key') {
+                    statusDiv.style.backgroundColor = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.style.border = '1px solid #f5c6cb';
+                    statusDiv.textContent = '❌ OpenAI API key is invalid. Please check your OPENAI_API_KEY in .env file.';
+                    statusDiv.style.display = 'block';
+                } else {
+                    statusDiv.style.backgroundColor = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.style.border = '1px solid #f5c6cb';
+                    statusDiv.textContent = '❌ Error checking API status: ' + (data.message || 'Unknown error');
+                    statusDiv.style.display = 'block';
+                }
+            } catch (err) {
+                statusDiv.style.backgroundColor = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
+                statusDiv.textContent = '❌ Error checking API status: ' + err.message;
+                statusDiv.style.display = 'block';
+            }
+        }
+        
+        // Check status when page loads
+        window.addEventListener('DOMContentLoaded', checkAPIStatus);
+        
+        async function submitQuestion() {
+            const questionInput = document.getElementById('questionInput');
+            const submitBtn = document.getElementById('submitBtn');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const responseContainer = document.getElementById('responseContainer');
+            const responseContent = document.getElementById('responseContent');
+            const errorMessage = document.getElementById('errorMessage');
+            const rateLimitMessage = document.getElementById('rateLimitMessage');
+            
+            const question = questionInput.value.trim();
+            
+            if (!question) {
+                errorMessage.textContent = 'Please enter a question.';
+                errorMessage.classList.add('show');
+                return;
+            }
+            
+            // Hide previous messages and responses
+            errorMessage.classList.remove('show');
+            rateLimitMessage.classList.remove('show');
+            responseContainer.classList.remove('show');
+            
+            // Show loading, disable button
+            loadingIndicator.style.display = 'block';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            
+            try {
+                const response = await fetch('/api/gpt-insights', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question: question })
+                });
+                
+                const data = await response.json();
+                
+                loadingIndicator.style.display = 'none';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Ask GPT';
+                
+                if (!response.ok) {
+                    if (response.status === 429) {
+                        rateLimitMessage.textContent = data.error || 'Rate limit exceeded. Please wait a moment before asking another question.';
+                        rateLimitMessage.classList.add('show');
+                    } else {
+                        errorMessage.textContent = data.error || 'An error occurred while processing your question.';
+                        errorMessage.classList.add('show');
+                    }
+                    return;
+                }
+                
+                // Show response
+                responseContent.textContent = data.answer || 'No response received.';
+                responseContainer.classList.add('show');
+                
+            } catch (err) {
+                loadingIndicator.style.display = 'none';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Ask GPT';
+                errorMessage.textContent = `Error: ${err.message}. Please try again.`;
+                errorMessage.classList.add('show');
+                console.error('Error submitting question:', err);
+            }
+        }
+        
+        // Allow Enter+Shift to submit, Enter alone for new line
+        document.getElementById('questionInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                submitQuestion();
+            }
+        });
+    </script>
+</body>
+</html>
+
