@@ -548,31 +548,26 @@
                     </div>
                 </div>
 
-                <!-- IG Per-Video Comparison -->
+                <!-- Per-Video Comparison (Combined IG & TikTok) -->
                 <div class="analysis-section collapsible-section">
                     <div class="collapsible-header" onclick="toggleSection(this)">
-                        <h2 style="margin: 0;">IG Per-Video Comparison</h2>
+                        <h2 style="margin: 0;">Per-Video Comparison</h2>
                         <span class="toggle-icon">▼</span>
                     </div>
                     <div class="collapsible-content">
                         <p class="section-description">
-                            Individual Instagram video performance with metadata overlap against top 30% performers.
+                            Individual video performance with metadata overlap against top 30% performers.
                         </p>
-                        <div id="perVideoComparisonIG"></div>
-                    </div>
-                </div>
-
-                <!-- TikTok Per-Video Comparison -->
-                <div class="analysis-section collapsible-section">
-                    <div class="collapsible-header" onclick="toggleSection(this)">
-                        <h2 style="margin: 0;">TikTok Per-Video Comparison</h2>
-                        <span class="toggle-icon">▼</span>
-                    </div>
-                    <div class="collapsible-content">
-                        <p class="section-description">
-                            Individual TikTok video performance with metadata overlap against top 30% performers.
-                        </p>
-                        <div id="perVideoComparisonTikTok"></div>
+                        <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                            <div>
+                                <label for="perVideoPlatformFilter" style="font-weight: 600; margin-right: 10px; color: #495057;">Platform:</label>
+                                <select id="perVideoPlatformFilter" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; background: white; cursor: pointer;">
+                                    <option value="instagram" selected>Instagram</option>
+                                    <option value="tiktok">TikTok</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="perVideoComparison"></div>
                     </div>
                 </div>
 
@@ -749,8 +744,18 @@
                 const platform = (v.platform || '').toLowerCase();
                 return platform === 'tiktok';
             });
-            displayPerVideoComparisonIG(igVideos);
-            displayPerVideoComparisonTikTok(tiktokVideos);
+            
+            // Store videos for platform toggle
+            window.perVideoComparisonData = {
+                instagram: igVideos,
+                tiktok: tiktokVideos
+            };
+            
+            // Display initial platform (Instagram)
+            displayPerVideoComparison('instagram');
+            
+            // Add event listener for platform filter
+            setupPerVideoPlatformFilter();
             
             // Display rank association
             displayRankAssociation(data.rank_association);
@@ -1070,31 +1075,49 @@
             container.innerHTML = html;
         }
 
-        function displayPerVideoComparison(videos) {
-            // This function is kept for backward compatibility but is no longer used
-            // The data is now split into IG and TikTok sections
+        function setupPerVideoPlatformFilter() {
+            const platformFilter = document.getElementById('perVideoPlatformFilter');
+            if (platformFilter && !platformFilter.hasAttribute('data-listener-added')) {
+                platformFilter.setAttribute('data-listener-added', 'true');
+                platformFilter.addEventListener('change', (e) => {
+                    displayPerVideoComparison(e.target.value);
+                });
+            }
         }
 
-        function displayPerVideoComparisonIG(videos) {
-            const container = document.getElementById('perVideoComparisonIG');
+        function displayPerVideoComparison(platform) {
+            const container = document.getElementById('perVideoComparison');
+            if (!container) return;
+            
+            // Get videos for selected platform
+            const videos = window.perVideoComparisonData && window.perVideoComparisonData[platform] 
+                ? window.perVideoComparisonData[platform] 
+                : [];
             
             if (!videos || videos.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No Instagram video comparison data available.</p></div>';
+                const platformName = platform === 'instagram' ? 'Instagram' : 'TikTok';
+                container.innerHTML = `<div class="empty-state"><p>No ${platformName} video comparison data available.</p></div>`;
                 return;
             }
 
             renderPerVideoComparisonTable(videos, container);
+        }
+
+        // Keep old functions for backward compatibility (they now call the new function)
+        function displayPerVideoComparisonIG(videos) {
+            // This is now handled by displayPerVideoComparison
+            if (window.perVideoComparisonData) {
+                window.perVideoComparisonData.instagram = videos;
+                displayPerVideoComparison('instagram');
+            }
         }
 
         function displayPerVideoComparisonTikTok(videos) {
-            const container = document.getElementById('perVideoComparisonTikTok');
-            
-            if (!videos || videos.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No TikTok video comparison data available.</p></div>';
-                return;
+            // This is now handled by displayPerVideoComparison
+            if (window.perVideoComparisonData) {
+                window.perVideoComparisonData.tiktok = videos;
+                displayPerVideoComparison('tiktok');
             }
-
-            renderPerVideoComparisonTable(videos, container);
         }
 
         function renderPerVideoComparisonTable(videos, container) {
@@ -1203,7 +1226,9 @@
                     </thead>
                     <tbody>
                         ${ranks.slice(0, 30).map((item, index) => {
-                            const vsMedianClass = item.vs_median_rank > 0 ? 'positive' : item.vs_median_rank < 0 ? 'negative' : 'neutral';
+                            // For ranks, lower is better, so negative vs_median_rank (below median) is GOOD (positive/green)
+                            // and positive vs_median_rank (above median) is BAD (negative/red)
+                            const vsMedianClass = item.vs_median_rank < 0 ? 'positive' : item.vs_median_rank > 0 ? 'negative' : 'neutral';
                             const vsMedianSign = item.vs_median_rank > 0 ? '+' : '';
                             const signalId = `rank-${item.feature}-${item.value}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
                             

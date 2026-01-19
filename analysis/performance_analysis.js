@@ -476,7 +476,7 @@ function computeRankAssociation(videos) {
     });
   });
 
-  return rankResults.sort((a, b) => b.avg_rank - a.avg_rank); // Sort by highest rank
+  return rankResults.sort((a, b) => a.avg_rank - b.avg_rank); // Sort by lowest rank (best first)
 }
 
 /**
