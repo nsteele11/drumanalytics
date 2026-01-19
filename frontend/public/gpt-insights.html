@@ -165,9 +165,9 @@
     <main>
         <div class="gpt-container">
             <div class="gpt-header">
-                <h1>🤖 GPT Insights</h1>
+                <h1>GPT Insights</h1>
                 <p>Ask questions about your video performance data. GPT will analyze your video metadata to provide insights.</p>
-                <div id="apiStatus" style="margin-top: 10px; padding: 8px; border-radius: 4px; font-size: 12px; display: none;"></div>
+                <div id="apiStatus" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
             </div>
 
             <div class="question-form">
@@ -203,36 +203,21 @@
                 const data = await response.json();
                 
                 if (data.status === 'working') {
-                    statusDiv.style.backgroundColor = '#d4edda';
-                    statusDiv.style.color = '#155724';
-                    statusDiv.style.border = '1px solid #c3e6cb';
-                    statusDiv.textContent = '✅ OpenAI API is configured and working!';
-                    statusDiv.style.display = 'block';
+                    statusDiv.innerHTML = '<strong>OpenAI</strong> ✓';
+                    statusDiv.style.color = '#28a745';
                 } else if (data.status === 'not_configured') {
-                    statusDiv.style.backgroundColor = '#fff3cd';
-                    statusDiv.style.color = '#856404';
-                    statusDiv.style.border = '1px solid #ffeaa7';
-                    statusDiv.textContent = '⚠️ OpenAI API key not configured. Please set OPENAI_API_KEY in your .env file.';
-                    statusDiv.style.display = 'block';
+                    statusDiv.innerHTML = '<strong>OpenAI</strong> ✗ <span style="color: #dc3545; margin-left: 8px;">API key not configured. Please set OPENAI_API_KEY in your .env file.</span>';
+                    statusDiv.style.color = '#dc3545';
                 } else if (data.status === 'invalid_key') {
-                    statusDiv.style.backgroundColor = '#f8d7da';
-                    statusDiv.style.color = '#721c24';
-                    statusDiv.style.border = '1px solid #f5c6cb';
-                    statusDiv.textContent = '❌ OpenAI API key is invalid. Please check your OPENAI_API_KEY in .env file.';
-                    statusDiv.style.display = 'block';
+                    statusDiv.innerHTML = '<strong>OpenAI</strong> ✗ <span style="color: #dc3545; margin-left: 8px;">API key is invalid. Please check your OPENAI_API_KEY in .env file.</span>';
+                    statusDiv.style.color = '#dc3545';
                 } else {
-                    statusDiv.style.backgroundColor = '#f8d7da';
-                    statusDiv.style.color = '#721c24';
-                    statusDiv.style.border = '1px solid #f5c6cb';
-                    statusDiv.textContent = '❌ Error checking API status: ' + (data.message || 'Unknown error');
-                    statusDiv.style.display = 'block';
+                    statusDiv.innerHTML = '<strong>OpenAI</strong> ✗ <span style="color: #dc3545; margin-left: 8px;">Error: ' + (data.message || 'Unknown error') + '</span>';
+                    statusDiv.style.color = '#dc3545';
                 }
             } catch (err) {
-                statusDiv.style.backgroundColor = '#f8d7da';
-                statusDiv.style.color = '#721c24';
-                statusDiv.style.border = '1px solid #f5c6cb';
-                statusDiv.textContent = '❌ Error checking API status: ' + err.message;
-                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = '<strong>OpenAI</strong> ✗ <span style="color: #dc3545; margin-left: 8px;">Error checking API status: ' + err.message + '</span>';
+                statusDiv.style.color = '#dc3545';
             }
         }
         
