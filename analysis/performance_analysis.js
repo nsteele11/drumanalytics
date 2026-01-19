@@ -763,6 +763,39 @@ function generateStructuredOutputs(videos) {
   const tiktokViewsMedian = calculateMedian(tiktokViewsValues);
   const tiktokLikesMedian = calculateMedian(tiktokLikesValues);
 
+  // Calculate TikTok-specific performance ranks
+  // Get all videos with TikTok data
+  const tiktokVideos = processedVideos
+    .filter(v => v.tiktokViews !== null && v.tiktokViews !== undefined && v.tiktokViews > 0)
+    .map(v => ({
+      s3Key: v.s3Key,
+      views: v.tiktokViews,
+      likes: v.tiktokLikes || 0,
+      engagement_proxy: v.tiktokViews > 0 ? (v.tiktokLikes || 0) / v.tiktokViews : 0
+    }));
+  
+  // Calculate TikTok-specific ranks
+  const tiktokViewsRank = calculateRanks(tiktokVideos, 'views', true);
+  const tiktokLikesRank = calculateRanks(tiktokVideos, 'likes', true);
+  const tiktokEngagementRank = calculateRanks(tiktokVideos, 'engagement_proxy', true);
+  
+  // Create a map of TikTok performance ranks by s3Key
+  const tiktokRanksMap = new Map();
+  tiktokVideos.forEach((video, idx) => {
+    const avgRank = (tiktokViewsRank[idx] + tiktokLikesRank[idx] + tiktokEngagementRank[idx]) / 3;
+    tiktokRanksMap.set(video.s3Key, {
+      performance_rank: avgRank,
+      ranking_breakdown: {
+        views_rank: tiktokViewsRank[idx],
+        likes_rank: tiktokLikesRank[idx],
+        engagement_rank: tiktokEngagementRank[idx],
+        views: video.views || 0,
+        likes: video.likes || 0,
+        engagement_proxy: video.engagement_proxy || 0
+      }
+    });
+  });
+
   // Create per-video comparison entries - one for each platform the video has data on
   const perVideoComparison = [];
   
@@ -835,10 +868,10 @@ function generateStructuredOutputs(videos) {
       const tiktokLikes = video.tiktokLikes || 0;
       const tiktokEngagementProxy = tiktokViews > 0 ? tiktokLikes / tiktokViews : 0;
       
-      // Use existing performance_rank (for videos with only TikTok, this will be based on TikTok metrics)
-      // For videos with both platforms, this will be based on IG metrics (since IG is preferred)
-      const tiktokPerformanceRank = video.performance_rank || 0;
-      const tiktokRankingBreakdown = video.platform === 'tiktok' ? video.ranking_breakdown : null;
+      // Use TikTok-specific ranks (calculated separately based on TikTok metrics only)
+      const tiktokRankData = tiktokRanksMap.get(video.s3Key);
+      const tiktokPerformanceRank = tiktokRankData ? tiktokRankData.performance_rank : 0;
+      const tiktokRankingBreakdown = tiktokRankData ? tiktokRankData.ranking_breakdown : null;
       
       perVideoComparison.push(createComparisonEntry(
         'tiktok',

@@ -169,6 +169,15 @@
             z-index: 10;
         }
         
+        .video-comparison-table th.sortable-header {
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        
+        .video-comparison-table th.sortable-header:hover {
+            background-color: #e9ecef;
+        }
+        
         .video-comparison-table tr:hover {
             background-color: #f8f9fa;
         }
@@ -496,7 +505,10 @@
     <main>
         <div class="analysis-container">
             <div class="analysis-header">
-                <h1>Performance Analytics</h1>
+                <div>
+                    <h1>Performance Analytics</h1>
+                    <div id="metadataInfo" style="font-size: 12px; color: #666; margin-top: 8px; line-height: 1.6;"></div>
+                </div>
                 <button id="refreshBtn" class="refresh-btn" onclick="loadAnalysis()">
                     🔄 Refresh Data
                 </button>
@@ -509,17 +521,6 @@
             <div id="error" class="error-message"></div>
 
             <div id="analysisContent" style="display: none;">
-                <!-- Metadata Info -->
-                <div class="analysis-section collapsible-section">
-                    <div class="collapsible-header" onclick="toggleSection(this)">
-                        <h2 style="margin: 0;">Analysis Overview</h2>
-                        <span class="toggle-icon">▼</span>
-                    </div>
-                    <div class="collapsible-content">
-                        <div id="metadataInfo" class="metadata-info"></div>
-                    </div>
-                </div>
-
                 <!-- Early Signal Summary -->
                 <div class="analysis-section collapsible-section">
                     <div class="collapsible-header" onclick="toggleSection(this)">
@@ -751,6 +752,14 @@
                 tiktok: tiktokVideos
             };
             
+            // Ensure sort state is initialized (default to performance_rank ascending)
+            if (!window.perVideoComparisonSort) {
+                window.perVideoComparisonSort = {
+                    column: 'performance_rank',
+                    direction: 'asc'
+                };
+            }
+            
             // Display initial platform (Instagram)
             displayPerVideoComparison('instagram');
             
@@ -770,27 +779,20 @@
         function displayMetadataInfo(metadata) {
             const container = document.getElementById('metadataInfo');
             if (!metadata) {
-                container.innerHTML = '<p>No metadata available</p>';
+                container.innerHTML = '<span>No metadata available</span>';
                 return;
             }
 
+            const totalVideos = metadata.total_videos || 0;
+            const videosWithMetrics = metadata.videos_with_metrics || 0;
+            const confidenceLevel = metadata.confidence_level || 'early_signal';
+            const analysisDate = metadata.analysis_date ? formatDate(metadata.analysis_date) : 'N/A';
+
             container.innerHTML = `
-                <div class="metadata-item">
-                    <strong>Total Videos</strong>
-                    <span>${metadata.total_videos || 0}</span>
-                </div>
-                <div class="metadata-item">
-                    <strong>Videos with Metrics</strong>
-                    <span>${metadata.videos_with_metrics || 0}</span>
-                </div>
-                <div class="metadata-item">
-                    <strong>Confidence Level</strong>
-                    <span>${metadata.confidence_level || 'early_signal'}</span>
-                </div>
-                <div class="metadata-item">
-                    <strong>Analysis Date</strong>
-                    <span>${metadata.analysis_date ? formatDate(metadata.analysis_date) : 'N/A'}</span>
-                </div>
+                <span><strong>Total Videos:</strong> ${totalVideos}</span> | 
+                <span><strong>Videos with Metrics:</strong> ${videosWithMetrics}</span> | 
+                <span><strong>Confidence Level:</strong> ${confidenceLevel}</span> | 
+                <span><strong>Analysis Date:</strong> ${analysisDate}</span>
             `;
         }
 
@@ -1120,27 +1122,126 @@
             }
         }
 
+        // Sort state for per-video comparison table
+        window.perVideoComparisonSort = {
+            column: 'performance_rank',
+            direction: 'asc' // asc for performance_rank (lower is better)
+        };
+
+        function sortPerVideoComparison(videos, column, direction) {
+            const sorted = [...videos];
+            
+            sorted.sort((a, b) => {
+                let aVal, bVal;
+                
+                switch(column) {
+                    case 'video':
+                        // Sort by track name, then artist name
+                        aVal = `${(a.trackName || '').toLowerCase()} ${(a.artistName || '').toLowerCase()}`;
+                        bVal = `${(b.trackName || '').toLowerCase()} ${(b.artistName || '').toLowerCase()}`;
+                        return direction === 'asc' 
+                            ? aVal.localeCompare(bVal)
+                            : bVal.localeCompare(aVal);
+                    
+                    case 'performance_rank':
+                        // Lower rank is better, so ascending means lower numbers first
+                        aVal = a.performance_rank || Infinity;
+                        bVal = b.performance_rank || Infinity;
+                        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    
+                    case 'views':
+                        aVal = a.views || 0;
+                        bVal = b.views || 0;
+                        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    
+                    case 'likes':
+                        aVal = a.likes || 0;
+                        bVal = b.likes || 0;
+                        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    
+                    case 'engagement':
+                        aVal = a.engagement_proxy || 0;
+                        bVal = b.engagement_proxy || 0;
+                        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    
+                    case 'overlap_count':
+                        aVal = (a.metadata_overlap_with_top_30_percent?.traits || []).length;
+                        bVal = (b.metadata_overlap_with_top_30_percent?.traits || []).length;
+                        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    
+                    default:
+                        return 0;
+                }
+            });
+            
+            return sorted;
+        }
+
+        function handlePerVideoComparisonSort(column) {
+            // Toggle direction if clicking the same column, otherwise default to asc
+            if (window.perVideoComparisonSort.column === column) {
+                window.perVideoComparisonSort.direction = window.perVideoComparisonSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                window.perVideoComparisonSort.column = column;
+                // For performance_rank, default to asc (lower is better)
+                // For others, default to desc (higher is better)
+                window.perVideoComparisonSort.direction = column === 'performance_rank' ? 'asc' : 'desc';
+            }
+            
+            // Get current platform and re-render
+            const platformFilter = document.getElementById('perVideoPlatformFilter');
+            const currentPlatform = platformFilter ? platformFilter.value : 'instagram';
+            displayPerVideoComparison(currentPlatform);
+        }
+
         function renderPerVideoComparisonTable(videos, container) {
             if (!videos || videos.length === 0) {
                 container.innerHTML = '<div class="empty-state"><p>No video comparison data available.</p></div>';
                 return;
             }
 
+            // Get sort state
+            const sortColumn = window.perVideoComparisonSort.column || 'performance_rank';
+            const sortDirection = window.perVideoComparisonSort.direction || 'asc';
+            
+            // Sort videos
+            const sortedVideos = sortPerVideoComparison(videos, sortColumn, sortDirection);
+            
+            // Helper to render sort indicator
+            const getSortIndicator = (column) => {
+                if (sortColumn !== column) return ' <span style="color: #ccc;">↕</span>';
+                return sortDirection === 'asc' 
+                    ? ' <span style="color: #495057;">↑</span>' 
+                    : ' <span style="color: #495057;">↓</span>';
+            };
+
             const tableHTML = `
                 <table class="video-comparison-table">
                     <thead>
                         <tr>
-                            <th>Video</th>
-                            <th>Performance Rank</th>
-                            <th>Views</th>
-                            <th>Likes</th>
-                            <th>Engagement</th>
-                            <th>Overlap Count</th>
+                            <th class="sortable-header" onclick="handlePerVideoComparisonSort('video')" style="cursor: pointer;">
+                                Video${getSortIndicator('video')}
+                            </th>
+                            <th class="sortable-header" onclick="handlePerVideoComparisonSort('performance_rank')" style="cursor: pointer;">
+                                Performance Rank${getSortIndicator('performance_rank')}
+                            </th>
+                            <th class="sortable-header" onclick="handlePerVideoComparisonSort('views')" style="cursor: pointer;">
+                                Views${getSortIndicator('views')}
+                            </th>
+                            <th class="sortable-header" onclick="handlePerVideoComparisonSort('likes')" style="cursor: pointer;">
+                                Likes${getSortIndicator('likes')}
+                            </th>
+                            <th class="sortable-header" onclick="handlePerVideoComparisonSort('engagement')" style="cursor: pointer;">
+                                Engagement${getSortIndicator('engagement')}
+                            </th>
+                            <th class="sortable-header" onclick="handlePerVideoComparisonSort('overlap_count')" style="cursor: pointer;">
+                                Overlap Count${getSortIndicator('overlap_count')}
+                            </th>
                             <th>Traits</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${videos.map(video => {
+                        ${sortedVideos.map(video => {
                             // Lower rank is better (rank 1 is best), so invert the logic
                             const rankClass = video.performance_rank <= 3 ? 'high' : video.performance_rank <= 6 ? 'medium' : 'low';
                             const overlapTraits = video.metadata_overlap_with_top_30_percent?.traits || [];
@@ -1153,13 +1254,18 @@
                                         <small style="color: #666;">${escapeHtml(video.artistName)}</small>
                                     </td>
                                     <td>
-                                        <div style="position: relative;">
-                                            <span class="performance-rank ${rankClass}">
+                                        <div style="position: relative; display: inline-block;">
+                                            <span class="performance-rank ${rankClass}" 
+                                                  onmouseenter="showRankingDetails('${video.s3Key}')"
+                                                  onmouseleave="hideRankingDetails('${video.s3Key}')"
+                                                  style="cursor: help;">
                                                 ${video.performance_rank.toFixed(2)}
                                             </span>
                                             ${video.ranking_breakdown ? `
-                                                <button class="ranking-details-btn" onclick="toggleRankingDetails('${video.s3Key}')" style="margin-left: 6px; padding: 2px 6px; font-size: 10px; background: #e9ecef; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; color: #495057;">ℹ️</button>
-                                                <div id="ranking-details-${video.s3Key}" class="ranking-details-dropdown" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 1000; min-width: 220px; font-size: 12px;">
+                                                <div id="ranking-details-${video.s3Key}" class="ranking-details-dropdown" 
+                                                     style="display: none; position: fixed; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 2147483647; min-width: 220px; font-size: 12px;"
+                                                     onmouseenter="clearRankingDetailsTimeout()"
+                                                     onmouseleave="hideRankingDetails('${video.s3Key}')">
                                                     <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600;">Ranking Breakdown</h4>
                                                     <div style="font-size: 11px; line-height: 1.5;">
                                                         <div><strong>Views Rank:</strong> ${video.ranking_breakdown.views_rank} (${(video.ranking_breakdown.views || 0).toLocaleString()} views)</div>
@@ -1318,27 +1424,83 @@
             });
         }
 
-        function toggleRankingDetails(s3Key) {
-            const dropdown = document.getElementById(`ranking-details-${s3Key}`);
-            if (dropdown) {
-                const isVisible = dropdown.style.display !== 'none';
-                // Close all other dropdowns
-                document.querySelectorAll('.ranking-details-dropdown').forEach(dd => {
-                    dd.style.display = 'none';
-                });
-                // Toggle this one
-                dropdown.style.display = isVisible ? 'none' : 'block';
+        // Hover-based ranking details popup
+        let rankingDetailsTimeout = null;
+
+        function showRankingDetails(s3Key) {
+            // Clear any pending hide timeout
+            if (rankingDetailsTimeout) {
+                clearTimeout(rankingDetailsTimeout);
+                rankingDetailsTimeout = null;
             }
+            
+            const dropdown = document.getElementById(`ranking-details-${s3Key}`);
+            if (!dropdown) return;
+            
+            // Find the trigger element
+            const trigger = document.querySelector(`span.performance-rank[onmouseenter*="'${s3Key}'"]`);
+            if (!trigger) return;
+            
+            // Close all other dropdowns
+            document.querySelectorAll('.ranking-details-dropdown').forEach(dd => {
+                if (dd.id !== `ranking-details-${s3Key}`) {
+                    dd.style.display = 'none';
+                }
+            });
+            
+            // Move dropdown to body to avoid clipping issues
+            if (dropdown.parentElement !== document.body) {
+                document.body.appendChild(dropdown);
+            }
+            
+            // Reset positioning styles
+            dropdown.style.display = 'block';
+            dropdown.style.position = 'fixed';
+            dropdown.style.visibility = 'hidden';
+            dropdown.style.top = '0px';
+            dropdown.style.left = '-9999px';
+            
+            // Force reflow to get actual width
+            void dropdown.offsetWidth;
+            
+            // Get trigger position
+            const triggerRect = trigger.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const padding = 10;
+            const dropdownWidth = dropdown.offsetWidth || 220;
+            
+            // Position dropdown
+            let leftPosition = triggerRect.left;
+            if (leftPosition + dropdownWidth > viewportWidth - padding) {
+                leftPosition = Math.max(padding, viewportWidth - dropdownWidth - padding);
+            }
+            if (leftPosition < padding) {
+                leftPosition = padding;
+            }
+            
+            dropdown.style.left = leftPosition + 'px';
+            dropdown.style.top = (triggerRect.bottom + 4) + 'px';
+            dropdown.style.visibility = 'visible';
         }
 
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!event.target.closest('.ranking-details-btn') && !event.target.closest('.ranking-details-dropdown')) {
-                document.querySelectorAll('.ranking-details-dropdown').forEach(dd => {
-                    dd.style.display = 'none';
-                });
+        function hideRankingDetails(s3Key) {
+            // Small delay to allow moving mouse to dropdown
+            rankingDetailsTimeout = setTimeout(() => {
+                const dropdown = document.getElementById(`ranking-details-${s3Key}`);
+                if (dropdown) {
+                    dropdown.style.display = 'none';
+                    dropdown.style.visibility = 'hidden';
+                }
+                rankingDetailsTimeout = null;
+            }, 200);
+        }
+
+        function clearRankingDetailsTimeout() {
+            if (rankingDetailsTimeout) {
+                clearTimeout(rankingDetailsTimeout);
+                rankingDetailsTimeout = null;
             }
-        });
+        }
 
         // Load charting data
         let allChartingVideos = [];

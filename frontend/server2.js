@@ -389,6 +389,43 @@ app.get("/api/videos", async (req, res) => {
 
         const metadata = JSON.parse(metadataText);
         
+        // Ensure we're using the most recent metrics from the metadata file
+        // The metadata file always contains the latest metrics values (updated when metrics are saved)
+        // metricsHistory is for tracking changes, but the root-level metrics are always current
+        let latestMetrics = {
+          igViews: metadata.igViews || null,
+          igLikes: metadata.igLikes || null,
+          tiktokViews: metadata.tiktokViews || null,
+          tiktokLikes: metadata.tiktokLikes || null,
+          igHashtags: metadata.igHashtags || null,
+          tiktokHashtags: metadata.tiktokHashtags || null,
+          postedDate: metadata.postedDate || null,
+          metricsUpdatedAt: metadata.metricsUpdatedAt || null
+        };
+        
+        // Verify against history if it exists (safety check - metadata should always be most recent)
+        if (metadata.metricsHistory && metadata.metricsHistory.length > 0) {
+          const mostRecentHistory = metadata.metricsHistory[0];
+          if (mostRecentHistory.current && mostRecentHistory.timestamp) {
+            const historyTimestamp = new Date(mostRecentHistory.timestamp);
+            const metadataTimestamp = metadata.metricsUpdatedAt ? new Date(metadata.metricsUpdatedAt) : null;
+            
+            // If history timestamp is more recent than metadata timestamp, use history (shouldn't happen, but safety check)
+            if (!metadataTimestamp || historyTimestamp > metadataTimestamp) {
+              latestMetrics = {
+                igViews: mostRecentHistory.current.igViews !== undefined ? mostRecentHistory.current.igViews : latestMetrics.igViews,
+                igLikes: mostRecentHistory.current.igLikes !== undefined ? mostRecentHistory.current.igLikes : latestMetrics.igLikes,
+                tiktokViews: mostRecentHistory.current.tiktokViews !== undefined ? mostRecentHistory.current.tiktokViews : latestMetrics.tiktokViews,
+                tiktokLikes: mostRecentHistory.current.tiktokLikes !== undefined ? mostRecentHistory.current.tiktokLikes : latestMetrics.tiktokLikes,
+                igHashtags: mostRecentHistory.current.igHashtags !== undefined ? mostRecentHistory.current.igHashtags : latestMetrics.igHashtags,
+                tiktokHashtags: mostRecentHistory.current.tiktokHashtags !== undefined ? mostRecentHistory.current.tiktokHashtags : latestMetrics.tiktokHashtags,
+                postedDate: mostRecentHistory.current.postedDate !== undefined ? mostRecentHistory.current.postedDate : latestMetrics.postedDate,
+                metricsUpdatedAt: mostRecentHistory.timestamp
+              };
+            }
+          }
+        }
+        
         // Extract video info - handle both Original type (free text) and Spotify-linked videos
         const videoInfo = {
           s3Key: metadata.s3Key || s3Key,
@@ -405,15 +442,15 @@ app.get("/api/videos", async (req, res) => {
           snapshotKey: metadata.snapshotKey || null,
           analyzedAt: metadata.analyzedAt || null,
           uploadTimestamp: metadata.s3Key ? parseInt(metadata.s3Key.split('-')[0]) : null,
-          // Social media metrics
-          igHashtags: metadata.igHashtags || null,
-          tiktokHashtags: metadata.tiktokHashtags || null,
-          igViews: metadata.igViews || null,
-          igLikes: metadata.igLikes || null,
-          tiktokViews: metadata.tiktokViews || null,
-          tiktokLikes: metadata.tiktokLikes || null,
-          postedDate: metadata.postedDate || null,
-          metricsUpdatedAt: metadata.metricsUpdatedAt || null,
+          // Social media metrics - always use the most recent values
+          igHashtags: latestMetrics.igHashtags,
+          tiktokHashtags: latestMetrics.tiktokHashtags,
+          igViews: latestMetrics.igViews,
+          igLikes: latestMetrics.igLikes,
+          tiktokViews: latestMetrics.tiktokViews,
+          tiktokLikes: latestMetrics.tiktokLikes,
+          postedDate: latestMetrics.postedDate,
+          metricsUpdatedAt: latestMetrics.metricsUpdatedAt,
           // Include analysis data if available
           duration: metadata.analysis?.duration || null,
           size_mb: metadata.analysis?.size_mb || null,
@@ -1050,6 +1087,43 @@ app.get("/api/performance-analysis", async (req, res) => {
 
         const metadata = JSON.parse(metadataText);
         
+        // Ensure we're using the most recent metrics
+        // If metricsHistory exists, verify we're using the latest values
+        let latestMetrics = {
+          igViews: metadata.igViews || null,
+          igLikes: metadata.igLikes || null,
+          tiktokViews: metadata.tiktokViews || null,
+          tiktokLikes: metadata.tiktokLikes || null,
+          igHashtags: metadata.igHashtags || null,
+          tiktokHashtags: metadata.tiktokHashtags || null,
+          postedDate: metadata.postedDate || null,
+          metricsUpdatedAt: metadata.metricsUpdatedAt || null
+        };
+        
+        // If metricsHistory exists and has entries, verify the current metrics match the most recent history entry
+        if (metadata.metricsHistory && metadata.metricsHistory.length > 0) {
+          const mostRecentHistory = metadata.metricsHistory[0];
+          // Use the most recent history entry's current values if they're more recent
+          if (mostRecentHistory.current && mostRecentHistory.timestamp) {
+            const historyTimestamp = new Date(mostRecentHistory.timestamp);
+            const metadataTimestamp = metadata.metricsUpdatedAt ? new Date(metadata.metricsUpdatedAt) : null;
+            
+            // If history is more recent, use history values (though metadata should always be updated)
+            if (!metadataTimestamp || historyTimestamp > metadataTimestamp) {
+              latestMetrics = {
+                igViews: mostRecentHistory.current.igViews !== undefined ? mostRecentHistory.current.igViews : latestMetrics.igViews,
+                igLikes: mostRecentHistory.current.igLikes !== undefined ? mostRecentHistory.current.igLikes : latestMetrics.igLikes,
+                tiktokViews: mostRecentHistory.current.tiktokViews !== undefined ? mostRecentHistory.current.tiktokViews : latestMetrics.tiktokViews,
+                tiktokLikes: mostRecentHistory.current.tiktokLikes !== undefined ? mostRecentHistory.current.tiktokLikes : latestMetrics.tiktokLikes,
+                igHashtags: mostRecentHistory.current.igHashtags !== undefined ? mostRecentHistory.current.igHashtags : latestMetrics.igHashtags,
+                tiktokHashtags: mostRecentHistory.current.tiktokHashtags !== undefined ? mostRecentHistory.current.tiktokHashtags : latestMetrics.tiktokHashtags,
+                postedDate: mostRecentHistory.current.postedDate !== undefined ? mostRecentHistory.current.postedDate : latestMetrics.postedDate,
+                metricsUpdatedAt: mostRecentHistory.timestamp
+              };
+            }
+          }
+        }
+        
         // Map to the format expected by the analysis module
         const videoData = {
           s3Key: metadata.s3Key || obj.Key.replace('results/', '').replace('.json', ''),
@@ -1066,15 +1140,15 @@ app.get("/api/performance-analysis", async (req, res) => {
           snapshotKey: metadata.snapshotKey || null,
           analyzedAt: metadata.analyzedAt || null,
           uploadTimestamp: metadata.s3Key ? parseInt(metadata.s3Key.split('-')[0]) : null,
-          // Social media metrics
-          igHashtags: metadata.igHashtags || null,
-          tiktokHashtags: metadata.tiktokHashtags || null,
-          igViews: metadata.igViews || null,
-          igLikes: metadata.igLikes || null,
-          tiktokViews: metadata.tiktokViews || null,
-          tiktokLikes: metadata.tiktokLikes || null,
-          postedDate: metadata.postedDate || null,
-          metricsUpdatedAt: metadata.metricsUpdatedAt || null,
+          // Social media metrics - always use the most recent values
+          igHashtags: latestMetrics.igHashtags,
+          tiktokHashtags: latestMetrics.tiktokHashtags,
+          igViews: latestMetrics.igViews,
+          igLikes: latestMetrics.igLikes,
+          tiktokViews: latestMetrics.tiktokViews,
+          tiktokLikes: latestMetrics.tiktokLikes,
+          postedDate: latestMetrics.postedDate,
+          metricsUpdatedAt: latestMetrics.metricsUpdatedAt,
           // Analysis data
           duration: metadata.analysis?.duration || null,
           size_mb: metadata.analysis?.size_mb || null,
