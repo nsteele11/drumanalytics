@@ -15,13 +15,22 @@ import spotifyRoutes from "./spotifyRoutes.js";
 import OpenAI from "openai";
 import rateLimit from "express-rate-limit";
 
-dotenv.config();
-
 // ----------------------
 // ES Module Helpers
 // ----------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load environment variables - check both current directory and parent directory
+dotenv.config(); // Try default location first
+if (!process.env.OPENAI_API_KEY) {
+  // Try current directory (frontend/.env)
+  dotenv.config({ path: path.join(__dirname, '.env') });
+}
+if (!process.env.OPENAI_API_KEY) {
+  // Try parent directory (.env)
+  dotenv.config({ path: path.join(__dirname, '..', '.env') });
+}
 
 // ----------------------
 // Upload Folder Setup
@@ -2655,13 +2664,29 @@ app.get("/drumanalytics", (req, res) => {
 // Start Server
 // ----------------------
 const PORT = 3001;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`SERVER2 running at http://0.0.0.0:${PORT}`);
-  if (!openai) {
-    console.warn("⚠️  WARNING: OPENAI_API_KEY not set. GPT Insights feature will not work.");
-    console.warn("   Set OPENAI_API_KEY in your .env file and restart the server.");
-  } else {
-    console.log("✅ GPT Insights endpoint enabled");
-    console.log("   Test the API key at: http://localhost:3001/api/gpt-insights/health");
-  }
+
+// Error handling for server startup
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
 });
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+});
+
+try {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`SERVER2 running at http://0.0.0.0:${PORT}`);
+    if (!openai) {
+      console.warn("⚠️  WARNING: OPENAI_API_KEY not set. GPT Insights feature will not work.");
+      console.warn("   Set OPENAI_API_KEY in your .env file and restart the server.");
+    } else {
+      console.log("✅ GPT Insights endpoint enabled");
+      console.log("   Test the API key at: http://localhost:3001/api/gpt-insights/health");
+    }
+  });
+} catch (err) {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+}
