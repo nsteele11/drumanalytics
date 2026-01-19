@@ -143,7 +143,22 @@ function createVideoCard(video) {
                             </span>
                         </div>
                     ` : ''}
-                    ${video.successRank !== null && video.successRank !== undefined ? `<div class="video-meta-item"><strong>Video Rank:</strong> <span style="font-weight: bold; color: ${getSuccessRankColor(video.successRank)};">#${video.successRank}</span></div>` : ''}
+                    ${video.successRank !== null && video.successRank !== undefined ? `
+                        <div class="video-meta-item">
+                            <strong>Video Rank:</strong> 
+                            <span class="hoverable-score-container" style="position: relative; display: inline-block;">
+                                <span class="clickable-score" style="font-weight: bold; color: ${getSuccessRankColor(video.successRank)}; cursor: pointer; text-decoration: underline;" 
+                                      onmouseenter="showRankDropdown('rank-${video.s3Key}', ${video.successRank})"
+                                      onmouseleave="hideRankDropdown('rank-${video.s3Key}')">
+                                    #${video.successRank}
+                                </span>
+                                <div id="rank-dropdown-rank-${video.s3Key}" class="score-dropdown" 
+                                     style="display: none; background: white; border: 1px solid #ced4da; border-radius: 4px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 100000; min-width: 280px; font-size: 12px;"
+                                     onmouseenter="clearScoreDropdownTimeout()"
+                                     onmouseleave="hideRankDropdown('rank-${video.s3Key}')"></div>
+                            </span>
+                        </div>
+                    ` : ''}
                     
                     <!-- Social Media Metrics Section -->
                     <div class="social-metrics-section" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
@@ -988,6 +1003,151 @@ function hideSuccessScoreDropdown(id) {
     // Small delay to allow moving mouse to dropdown
     scoreDropdownTimeout = setTimeout(() => {
         const dropdown = document.getElementById(`success-dropdown-${id}`);
+        if (dropdown) {
+            dropdown.style.display = 'none';
+            dropdown.style.visibility = 'hidden';
+        }
+        scoreDropdownTimeout = null;
+    }, 200);
+}
+
+function showRankDropdown(id, currentRank) {
+    // Clear any pending hide timeout
+    if (scoreDropdownTimeout) {
+        clearTimeout(scoreDropdownTimeout);
+        scoreDropdownTimeout = null;
+    }
+    
+    const dropdown = document.getElementById(`rank-dropdown-${id}`);
+    if (!dropdown) return;
+    
+    // Find the trigger element - if dropdown is already in body, find it via the original parent or by searching
+    let trigger = null;
+    let videoCard = null;
+    
+    // Try to find trigger using closest (works if dropdown is still in original location)
+    if (dropdown.parentElement && dropdown.parentElement !== document.body) {
+        trigger = dropdown.closest('.hoverable-score-container');
+        videoCard = trigger ? trigger.closest('.video-card') : null;
+    }
+    
+    // If not found, search for it by the dropdown ID pattern
+    if (!trigger || !videoCard) {
+        // The id format is 'rank-dropdown-rank-${s3Key}', so we extract the s3Key
+        const s3Key = id.replace('rank-', '');
+        // Try multiple search strategies
+        const clickableScore = document.querySelector(`span.clickable-score[onmouseenter*="'rank-${s3Key}'"]`) ||
+                              document.querySelector(`.clickable-score[onmouseenter*="${s3Key}"]`);
+        if (clickableScore) {
+            trigger = clickableScore.closest('.hoverable-score-container');
+            videoCard = trigger ? trigger.closest('.video-card') : null;
+        }
+    }
+    
+    // Close all other score dropdowns
+    document.querySelectorAll('.score-dropdown').forEach(dd => {
+        if (dd.id !== `rank-dropdown-${id}`) {
+            dd.style.display = 'none';
+        }
+    });
+    
+    // Get top 10 ranked videos (sorted by rank, 1 is best)
+    const videosWithRanks = allVideosForShockValue
+        .filter(v => v.successRank !== null && v.successRank !== undefined)
+        .sort((a, b) => a.successRank - b.successRank)
+        .slice(0, 10);
+    
+    // Set content
+    if (videosWithRanks.length > 0) {
+        dropdown.innerHTML = `
+            <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
+                <strong>Top 10 Ranked Videos</strong>
+            </div>
+            <div style="margin-top: 10px;">
+                ${videosWithRanks.map((video, index) => {
+                    const trackName = video.trackName || 'Unknown Track';
+                    const isCurrentVideo = video.successRank === currentRank;
+                    const rankColor = getSuccessRankColor(video.successRank);
+                    return `
+                        <div style="margin-bottom: 8px; padding: 4px 0; ${isCurrentVideo ? 'background-color: #f0f8ff; padding: 6px; border-radius: 4px; border-left: 3px solid ' + rankColor + ';' : ''}">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: ${isCurrentVideo ? '700' : '600'}; color: ${rankColor};">
+                                    #${video.successRank}
+                                </span>
+                                <span style="flex: 1; margin-left: 10px; ${isCurrentVideo ? 'font-weight: 600;' : ''}">
+                                    ${escapeHtml(trackName)}
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    } else {
+        dropdown.innerHTML = '<p>No ranked videos available.</p>';
+    }
+    
+    // Move dropdown to body FIRST to avoid parent container clipping issues
+    // This must be done before getting cardRect/triggerRect
+    if (dropdown.parentElement !== document.body) {
+        document.body.appendChild(dropdown);
+    }
+    
+    // Reset all positioning styles to ensure clean state
+    dropdown.style.display = 'block';
+    dropdown.style.position = 'fixed';
+    dropdown.style.visibility = 'hidden';
+    dropdown.style.top = '0px';
+    dropdown.style.left = '-9999px';
+    dropdown.style.zIndex = '2147483647'; // Set z-index early
+    dropdown.style.transform = 'translateZ(0)'; // Force new stacking context
+    dropdown.style.right = 'auto'; // Clear any right positioning
+    dropdown.style.bottom = 'auto'; // Clear any bottom positioning
+    
+    // Use offsetWidth which works even when visibility is hidden
+    // Force a reflow to ensure dimensions are calculated
+    void dropdown.offsetWidth;
+    
+    // Now position it properly using actual measurements
+    if (videoCard && trigger) {
+        // Get bounding rects AFTER moving to body (these are still valid)
+        const cardRect = videoCard.getBoundingClientRect();
+        const triggerRect = trigger.getBoundingClientRect();
+        
+        const viewportWidth = window.innerWidth;
+        const padding = 10; // Padding from viewport edge
+        
+        // Get actual dropdown width using offsetWidth (works even when hidden)
+        const dropdownWidth = dropdown.offsetWidth || 280; // fallback to min-width
+        
+        // Start with left edge aligned to card
+        let leftPosition = cardRect.left;
+        
+        // Check if dropdown would overflow the right edge of viewport
+        if (leftPosition + dropdownWidth > viewportWidth - padding) {
+            // Adjust to keep within viewport
+            leftPosition = Math.max(padding, viewportWidth - dropdownWidth - padding);
+        }
+        
+        // Ensure we don't go off the left edge
+        if (leftPosition < padding) {
+            leftPosition = padding;
+        }
+        
+        // Apply final position and make visible
+        dropdown.style.left = leftPosition + 'px';
+        dropdown.style.top = (triggerRect.bottom + 4) + 'px';
+        dropdown.style.visibility = 'visible';
+    } else {
+        // Fallback if card/trigger not found
+        dropdown.style.visibility = 'visible';
+    }
+}
+
+function hideRankDropdown(id) {
+    // Small delay to allow moving mouse to dropdown
+    scoreDropdownTimeout = setTimeout(() => {
+        const dropdown = document.getElementById(`rank-dropdown-${id}`);
         if (dropdown) {
             dropdown.style.display = 'none';
             dropdown.style.visibility = 'hidden';
