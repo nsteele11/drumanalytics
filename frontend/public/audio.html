@@ -1600,12 +1600,13 @@
             }
         }
 
-        function displayArtistFollowersHistogram(videos, platform = 'Instagram') {
+        function displayArtistFollowersHistogram(videos, platformParam = 'Instagram') {
             const container = document.getElementById('artistFollowersHistogram');
             if (!container) return;
             
             // Ensure platform is always defined (handle undefined, null, empty string)
-            if (!platform || platform === 'undefined' || platform === 'null') {
+            let platform = platformParam;
+            if (typeof platform === 'undefined' || platform === null || platform === '' || platform === 'undefined' || platform === 'null') {
                 platform = 'Instagram';
             }
             
@@ -1776,12 +1777,13 @@
             container.innerHTML = svg;
         }
 
-        function displayPopularityHistogram(videos, platform = 'Instagram') {
+        function displayPopularityHistogram(videos, platformParam = 'Instagram') {
             const container = document.getElementById('popularityHistogram');
             if (!container) return;
             
             // Ensure platform is always defined (handle undefined, null, empty string)
-            if (!platform || platform === 'undefined' || platform === 'null') {
+            let platform = platformParam;
+            if (typeof platform === 'undefined' || platform === null || platform === '' || platform === 'undefined' || platform === 'null') {
                 platform = 'Instagram';
             }
             
