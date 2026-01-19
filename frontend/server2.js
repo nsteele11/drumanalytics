@@ -22,14 +22,28 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load environment variables - check both current directory and parent directory
-dotenv.config(); // Try default location first
-if (!process.env.OPENAI_API_KEY) {
-  // Try current directory (frontend/.env)
-  dotenv.config({ path: path.join(__dirname, '.env') });
+// Try multiple locations to find .env file
+const envPaths = [
+  path.join(__dirname, '.env'),           // frontend/.env
+  path.join(__dirname, '..', '.env'),    // .env (root)
+  '.env'                                   // Current working directory
+];
+
+let envLoaded = false;
+for (const envPath of envPaths) {
+  const result = dotenv.config({ path: envPath });
+  if (!result.error) {
+    envLoaded = true;
+    if (process.env.OPENAI_API_KEY) {
+      console.log(`✅ Loaded .env from: ${envPath}`);
+      break;
+    }
+  }
 }
+
 if (!process.env.OPENAI_API_KEY) {
-  // Try parent directory (.env)
-  dotenv.config({ path: path.join(__dirname, '..', '.env') });
+  console.warn('⚠️  OPENAI_API_KEY not found in .env files. Tried:', envPaths.join(', '));
+  console.warn('   Make sure OPENAI_API_KEY is set in your .env file or PM2 environment variables.');
 }
 
 // ----------------------
